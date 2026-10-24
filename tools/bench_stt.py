@@ -1,6 +1,9 @@
 """比較 STT 引擎：對 samples/*.wav 算字元錯誤率（CER），參考答案是 tools/make_samples.py 產生的 *.ref.json。
 
-    uv run python tools/bench_stt.py faster-whisper qwen3-asr [--samples samples]
+    uv run python tools/bench_stt.py faster-whisper qwen3-asr [--samples samples] [--only stream_ja,talk_en]
+
+雲端引擎（funasr、openai、google）會用設定檔裡的雲端設定和認證管理員裡的金鑰，並且會計費，
+建議搭配 --only 只跑少數樣本。
 
 CER 會先做 NFKC、去掉標點和空白；漢字和阿拉伯數字的寫法差異（三回／3回）也會算成錯誤，
 所以只適合拿來比較引擎之間的相對好壞。
@@ -16,7 +19,7 @@ import unicodedata
 from pathlib import Path
 
 from omni2.audio.decode import read_wav
-from omni2.config.settings import SttSettings
+from omni2.config.settings import load_settings
 from omni2.stt.base import TranscribeOptions
 from omni2.stt.registry import create_engine
 from omni2.vad.presets import get_preset
@@ -40,16 +43,21 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("engines", nargs="+")
     parser.add_argument("--samples", default="samples")
+    parser.add_argument("--only", help="只跑這些樣本（逗號分隔，不含副檔名）")
     args = parser.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     wavs = sorted(p for p in Path(args.samples).glob("*.wav") if p.with_suffix(".ref.json").exists())
+    if args.only:
+        wanted = set(args.only.split(","))
+        wavs = [p for p in wavs if p.stem in wanted]
+    base = load_settings().stt
     audios = [read_wav(p) for p in wavs]
     refs = [json.loads(p.with_suffix(".ref.json").read_text(encoding="utf-8")) for p in wavs]
     rows = []
     for name in args.engines:
-        engine = create_engine(SttSettings(engine=name))
+        engine = create_engine(base.model_copy(update={"engine": name}))
         start = time.perf_counter()
         engine.load()
         load_s = time.perf_counter() - start

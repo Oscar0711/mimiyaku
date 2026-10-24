@@ -1,5 +1,5 @@
 from omni2.jobs.stt_worker import _groups
-from omni2.stt.qwen3_asr_engine import attach_punctuation
+from omni2.stt.words import attach_punctuation
 
 
 def test_attach_punctuation_japanese():

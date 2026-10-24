@@ -10,6 +10,9 @@ from omni2.stt.base import SttEngine
 ENGINES = {
     "faster-whisper": "omni2.stt.faster_whisper_engine:FasterWhisperEngine",
     "qwen3-asr": "omni2.stt.qwen3_asr_engine:Qwen3AsrEngine",
+    "funasr": "omni2.stt.funasr_engine:FunAsrEngine",
+    "openai": "omni2.stt.openai_engine:OpenAiEngine",
+    "google": "omni2.stt.google_engine:GoogleEngine",
 }
 
 

@@ -7,16 +7,16 @@
 from __future__ import annotations
 
 import logging
-import unicodedata
 from collections import Counter
 from typing import Callable
 
 import numpy as np
 
 from omni2.audio.decode import SAMPLE_RATE
-from omni2.core.types import Segment, Transcript, Word
+from omni2.core.types import Segment, Transcript
 from omni2.stt.base import ProgressFn, SttEngine, TranscribeOptions
 from omni2.stt.clips import make_clips
+from omni2.stt.words import attach_punctuation
 
 log = logging.getLogger(__name__)
 
@@ -27,38 +27,6 @@ _NAMES = {"ja": "Japanese", "en": "English", "ko": "Korean", "zh": "Chinese", "y
           "fr": "French", "de": "German", "es": "Spanish", "ru": "Russian", "th": "Thai",
           "vi": "Vietnamese", "id": "Indonesian", "it": "Italian", "pt": "Portuguese"}
 _CODES = {v: k for k, v in _NAMES.items()}
-# 開括號屬於下一個詞，不要接在前一個詞後面
-_OPENING = set("「『（〈《【〔“‘([{")
-
-
-def _is_word_char(ch: str) -> bool:
-    return ch == "'" or unicodedata.category(ch)[0] in "LN"
-
-
-def attach_punctuation(text: str, items: list[tuple[str, float, float]]) -> list[Word]:
-    """對齊器輸出的詞去掉了標點，這裡依序對回原文，把標點和空白接回每個詞。
-
-    每個詞的文字包含它前面的空白與開括號、後面的標點，串起來就是原文。重新切段要靠
-    「。」這類句尾標點，所以不能少。
-    """
-    words: list[Word] = []
-    pos = 0
-    folded = text.casefold()
-    for token, start, end in items:
-        idx = folded.find(token.casefold(), pos) if token else -1
-        if idx < 0:
-            words.append(Word(start, end, token))
-            continue
-        stop = idx + len(token)
-        while (stop < len(text) and not text[stop].isspace() and not _is_word_char(text[stop])
-               and text[stop] not in _OPENING):
-            stop += 1
-        words.append(Word(start, end, text[pos:stop]))
-        pos = stop
-    if words and pos < len(text):
-        last = words[-1]
-        words[-1] = Word(last.start, last.end, last.text + text[pos:])
-    return words
 
 
 class Qwen3AsrEngine(SttEngine):

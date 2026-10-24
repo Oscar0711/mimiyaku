@@ -41,6 +41,8 @@ from omni2.ui.terms_dialog import TermsDialog
 
 MEDIA_FILTER = "影音檔 (*.mp3 *.wav *.m4a *.flac *.ogg *.opus *.aac *.mp4 *.mkv *.webm *.mov *.avi *.ts);;所有檔案 (*)"
 SOURCE_LANGS = [("自動偵測", None), ("日文", "ja"), ("英文", "en"), ("韓文", "ko"), ("中文", "zh")]
+STT_ENGINES = [("Qwen3-ASR（本地，建議）", "qwen3-asr"), ("Whisper（本地）", "faster-whisper"),
+               ("阿里雲 Fun-ASR（雲端）", "funasr"), ("OpenAI（雲端）", "openai"), ("Google（雲端）", "google")]
 TARGET_LANGS = [("繁體中文", "zh-TW"), ("簡體中文", "zh-CN"), ("英文", "en"), ("日文", "ja"), ("韓文", "ko")]
 _STATUS_TEXT = {"start": "", "done": "完成", "skip": "沿用斷點", "error": "失敗"}
 
@@ -182,15 +184,23 @@ class FileWorkspace(QWidget):
             extras.addWidget(w)
         extras.addStretch()
 
+        self.engine_combo = QComboBox()
+        for label, engine in STT_ENGINES:
+            self.engine_combo.addItem(label, engine)
+        self.engine_combo.setCurrentIndex(max(0, self.engine_combo.findData(self.settings.stt.engine)))
+        self.engine_combo.setToolTip("雲端引擎需要先在「設定」分頁填入金鑰，會依使用量計費。")
+
         grid.addWidget(QLabel("來源語言"), 0, 0)
         grid.addWidget(self.src_combo, 0, 1)
         grid.addWidget(self.translate_check, 0, 2)
         grid.addWidget(self.tgt_combo, 0, 3)
-        grid.setColumnStretch(4, 1)
+        grid.addWidget(QLabel("　辨識引擎"), 0, 4)
+        grid.addWidget(self.engine_combo, 0, 5)
+        grid.setColumnStretch(6, 1)
         grid.addWidget(QLabel("輸出"), 1, 0)
-        grid.addLayout(formats, 1, 1, 1, 4)
+        grid.addLayout(formats, 1, 1, 1, 6)
         grid.addWidget(QLabel("處理"), 2, 0)
-        grid.addLayout(extras, 2, 1, 1, 4)
+        grid.addLayout(extras, 2, 1, 1, 6)
 
         self.out_combo = QComboBox()
         self.out_combo.addItem("和原檔相同的資料夾", None)
@@ -207,7 +217,7 @@ class FileWorkspace(QWidget):
         out_row.addWidget(self.out_edit, 1)
         out_row.addWidget(self.out_browse)
         grid.addWidget(QLabel("存到"), 3, 0)
-        grid.addLayout(out_row, 3, 1, 1, 4)
+        grid.addLayout(out_row, 3, 1, 1, 6)
         self._sync_enabled()
         return box
 
@@ -243,6 +253,7 @@ class FileWorkspace(QWidget):
         fm.num_speakers = self.speakers_spin.value()
         fm.terms_first = self.terms_check.isChecked()
         self.settings.translate.target = self.tgt_combo.currentData()
+        self.settings.stt.engine = self.engine_combo.currentData()
         self.settings.output.formats = [n for n, c in self.format_checks.items() if c.isChecked()]
         self.settings.output.bilingual = self.bilingual_check.isChecked()
         custom = self.out_combo.currentData() == "custom" and self.out_edit.text()

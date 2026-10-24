@@ -28,6 +28,7 @@ uv run omni2-gui
 「設定」分頁：
 - 可以把工作檔、模型和 llama.cpp 搬到其他資料夾，也可以選擇把語音辨識模型（Hugging Face 快取）一起搬過去。
 - 可以選擇講者分離的引擎和區分靈敏度。
+- 可以填入雲端語音辨識的金鑰（阿里雲 Fun-ASR、OpenAI、Google）。金鑰存在 Windows 認證管理員，不會寫進設定檔；按「測試」可以確認金鑰是否有效。
 - 要用 pyannote 的話：先到 [pyannote/speaker-diarization-community-1](https://hf.co/pyannote/speaker-diarization-community-1) 同意使用條款，再執行 `uv run hf auth login` 登入。
 
 ## 檔案翻譯（CLI）

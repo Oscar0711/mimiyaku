@@ -11,6 +11,17 @@ from omni2.core import paths
 from omni2.core.jsonio import write_text_atomic
 
 
+class CloudSettings(BaseModel):
+    """雲端語音辨識。金鑰不在這裡，存在 Windows 認證管理員（見 omni2.core.secrets）。"""
+
+    dashscope_region: str = "intl"  # intl（國際版，新加坡）| cn（中國大陸版）；兩區的金鑰不能互通
+    funasr_model: str = "fun-asr"
+    openai_model: str = "gpt-4o-transcribe"  # 或 whisper-1（有逐詞時間）
+    google_project: str = ""
+    google_location: str = "us"
+    google_model: str = "chirp_3"
+
+
 class SttSettings(BaseModel):
     engine: str = "qwen3-asr"  # qwen3-asr | faster-whisper（M2 實測 Qwen3-ASR 錯誤率較低、標點完整）
     model: str = "large-v3-turbo"  # faster-whisper 的模型
@@ -24,8 +35,16 @@ class SttSettings(BaseModel):
     batch_size: int = 8  # faster-whisper 批次推論；1＝不用批次
     filter_hallucinations: bool = True
 
+    cloud: CloudSettings = Field(default_factory=CloudSettings)
+
     def active_model(self) -> str:
-        return self.qwen_model if self.engine == "qwen3-asr" else self.model
+        c = self.cloud
+        return {
+            "qwen3-asr": self.qwen_model,
+            "funasr": c.funasr_model,
+            "openai": c.openai_model,
+            "google": c.google_model,
+        }.get(self.engine, self.model)
 
 
 class TranslateSettings(BaseModel):

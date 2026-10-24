@@ -1,4 +1,4 @@
-"""設定分頁：工作檔與模型的儲存位置、講者分離引擎。"""
+"""設定分頁：工作檔與模型的儲存位置、雲端語音辨識的金鑰、講者分離引擎。"""
 
 from __future__ import annotations
 
@@ -19,18 +19,24 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
 from omni2.config.settings import Settings, save_settings
-from omni2.core import paths, storage
+from omni2.core import paths, secrets, storage
 from omni2.post.diarize import DEFAULT_THRESHOLD, PYANNOTE_MODEL
 
 # 講者區分靈敏度 → ecapa 聚類門檻（距離越小越容易分成不同人）
 SENSITIVITY = [("一般（建議）", DEFAULT_THRESHOLD),
                ("較敏感：不同的人常被併成同一人時", DEFAULT_THRESHOLD - 0.1),
                ("較寬鬆：同一人常被拆成好幾人時", DEFAULT_THRESHOLD + 0.1)]
+
+
+def storage_secret_path() -> str:
+    """目前設定的 Google 服務帳戶金鑰路徑（存在認證管理員裡的是路徑，不是金鑰內容）。"""
+    return secrets.get_secret("google") or ""
 
 
 class _Worker(QThread):
@@ -58,11 +64,193 @@ class SettingsPage(QWidget):
     def __init__(self, settings: Settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        layout = QVBoxLayout(self)
+        inner = QWidget()
+        layout = QVBoxLayout(inner)
         layout.addWidget(self._storage_box())
+        layout.addWidget(self._cloud_box())
         layout.addWidget(self._diarize_box())
         layout.addStretch()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setWidget(inner)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(scroll)
         self.refresh_usage()
+
+    # ---- 雲端語音辨識 ----
+
+    def _cloud_box(self) -> QGroupBox:
+        c = self.settings.stt.cloud
+        box = QGroupBox("雲端語音辨識（金鑰存在 Windows 認證管理員，不會寫進設定檔）")
+        form = QFormLayout(box)
+
+        self.key_edits: dict[str, QLineEdit] = {}
+        self.key_status: dict[str, QLabel] = {}
+
+        # 阿里雲 Fun-ASR
+        self.region_combo = QComboBox()
+        self.region_combo.addItem("國際版（新加坡，dashscope-intl）", "intl")
+        self.region_combo.addItem("中國大陸版（dashscope）", "cn")
+        self.region_combo.setCurrentIndex(max(0, self.region_combo.findData(c.dashscope_region)))
+        self.region_combo.currentIndexChanged.connect(self._save_cloud)
+        form.addRow("阿里雲 Fun-ASR 金鑰", self._key_row("dashscope", self._test_dashscope))
+        form.addRow("　區域", self.region_combo)
+        form.addRow("", self.key_status["dashscope"])
+
+        # OpenAI
+        self.openai_model = QComboBox()
+        for model, note in (("gpt-4o-transcribe", "較準，時間軸用估計的"), ("gpt-4o-mini-transcribe", "較便宜"),
+                            ("whisper-1", "有逐詞時間")):
+            self.openai_model.addItem(f"{model}（{note}）", model)
+        self.openai_model.setCurrentIndex(max(0, self.openai_model.findData(c.openai_model)))
+        self.openai_model.currentIndexChanged.connect(self._save_cloud)
+        form.addRow("OpenAI 金鑰", self._key_row("openai", self._test_openai))
+        form.addRow("　模型", self.openai_model)
+        form.addRow("", self.key_status["openai"])
+
+        # Google Cloud
+        self.google_path = QLineEdit(storage_secret_path())
+        self.google_path.setReadOnly(True)
+        self.google_path.setPlaceholderText("服務帳戶金鑰 JSON（沒有就使用 Application Default Credentials）")
+        pick = QPushButton("選擇檔案…")
+        pick.clicked.connect(self._pick_google_key)
+        row = QHBoxLayout()
+        row.addWidget(self.google_path, 1)
+        row.addWidget(pick)
+        self.google_project = QLineEdit(c.google_project)
+        self.google_project.setPlaceholderText("例如 my-project-123")
+        self.google_project.editingFinished.connect(self._save_cloud)
+        self.google_location = QComboBox()
+        for loc in ("us", "eu", "global", "asia-southeast1", "asia-northeast1"):
+            self.google_location.addItem(loc, loc)
+        self.google_location.setCurrentIndex(max(0, self.google_location.findData(c.google_location)))
+        self.google_location.currentIndexChanged.connect(self._save_cloud)
+        form.addRow("Google 服務帳戶金鑰", row)
+        form.addRow("　專案 ID", self.google_project)
+        form.addRow("　區域", self.google_location)
+
+        note = QLabel("※ OpenAI 和 Google 目前只用模擬的回應測試過，還沒用真實金鑰驗證。")
+        note.setStyleSheet("color: #666;")
+        form.addRow("", note)
+        return box
+
+    def _key_row(self, name: str, test) -> QHBoxLayout:
+        edit = QLineEdit()
+        edit.setEchoMode(QLineEdit.EchoMode.Password)
+        self.key_edits[name] = edit
+        self.key_status[name] = QLabel()
+        save = QPushButton("儲存")
+        save.clicked.connect(lambda: self._save_key(name))
+        delete = QPushButton("刪除")
+        delete.clicked.connect(lambda: self._delete_key(name))
+        check = QPushButton("測試")
+        check.clicked.connect(test)
+        row = QHBoxLayout()
+        row.addWidget(edit, 1)
+        for b in (save, delete, check):
+            row.addWidget(b)
+        self._show_key_state(name)
+        return row
+
+    def _show_key_state(self, name: str) -> None:
+        source = secrets.secret_source(name)
+        env = secrets.ENV_VARS.get(name, "")
+        text = {"keyring": "已儲存（留空表示不變更）", "env": f"使用環境變數 {env}"}.get(source, "貼上金鑰後按「儲存」")
+        self.key_edits[name].setPlaceholderText(text)
+        self.key_status[name].setText({"keyring": "✓ 已設定", "env": "✓ 已設定（環境變數）"}.get(source, "尚未設定"))
+
+    def _save_key(self, name: str) -> None:
+        value = self.key_edits[name].text().strip()
+        if not value:
+            return
+        secrets.set_secret(name, value)
+        self.key_edits[name].clear()
+        self._show_key_state(name)
+
+    def _delete_key(self, name: str) -> None:
+        if secrets.secret_source(name) != "keyring":
+            return
+        if QMessageBox.question(self, "刪除金鑰", "要從 Windows 認證管理員刪除這把金鑰嗎？") \
+                == QMessageBox.StandardButton.Yes:
+            secrets.set_secret(name, None)
+            self._show_key_state(name)
+
+    def _save_cloud(self) -> None:
+        c = self.settings.stt.cloud
+        c.dashscope_region = self.region_combo.currentData()
+        c.openai_model = self.openai_model.currentData()
+        c.google_project = self.google_project.text().strip()
+        c.google_location = self.google_location.currentData()
+        save_settings(self.settings)
+
+    def _pick_google_key(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "選擇服務帳戶金鑰", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            from google.oauth2 import service_account
+
+            creds = service_account.Credentials.from_service_account_file(path)
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.warning(self, "Google 金鑰", f"讀不了這個金鑰檔：{e}")
+            return
+        secrets.set_secret("google", str(Path(path)))
+        self.google_path.setText(str(Path(path)))
+        if not self.google_project.text() and getattr(creds, "project_id", None):
+            self.google_project.setText(creds.project_id)  # 金鑰檔裡就有專案 ID
+        self._save_cloud()
+
+    def _test_dashscope(self) -> None:
+        from omni2.stt.funasr_engine import REGION_HOSTS, check_key
+
+        self._save_key("dashscope")
+        key = secrets.get_secret("dashscope")
+        if not key:
+            self.key_status["dashscope"].setText("尚未設定金鑰")
+            return
+        self.key_status["dashscope"].setText("測試中…")
+        first = self.region_combo.currentData()
+        order = [first] + [r for r in REGION_HOSTS if r != first]
+
+        def work(_w):
+            errors = []
+            for region in order:  # 目前的區域不通就試另一區（兩區的金鑰不能互通）
+                ok, message = check_key(key, region, self.settings.stt.cloud.funasr_model)
+                if ok:
+                    return region, ""
+                errors.append(f"{region}：{message}")
+            return None, "；".join(errors)
+
+        def done(result):
+            region, error = result
+            if region is None:
+                self.key_status["dashscope"].setText(f"✗ 失敗：{error[:200]}")
+                return
+            self.region_combo.setCurrentIndex(self.region_combo.findData(region))
+            self.key_status["dashscope"].setText(f"✓ 金鑰有效（{self.region_combo.currentText()}）")
+
+        self._run(work, done)
+
+    def _test_openai(self) -> None:
+        self._save_key("openai")
+        key = secrets.get_secret("openai")
+        if not key:
+            self.key_status["openai"].setText("尚未設定金鑰")
+            return
+        self.key_status["openai"].setText("測試中…")
+
+        def work(_w):
+            from openai import OpenAI
+
+            try:
+                OpenAI(api_key=key, timeout=20).models.list()  # 不計費的請求
+                return "✓ 金鑰有效"
+            except Exception as e:  # noqa: BLE001
+                return f"✗ 失敗：{type(e).__name__}: {str(e)[:200]}"
+
+        self._run(work, self.key_status["openai"].setText)
 
     # ---- 儲存位置 ----
 
@@ -268,7 +456,8 @@ class SettingsPage(QWidget):
 
     def set_busy(self, busy: bool) -> None:
         """檔案工作區在處理時，不能搬移或清除。"""
-        for w in (self.apply_button, self.clear_button, self.engine_combo, self.sensitivity_combo):
+        for w in (self.apply_button, self.clear_button, self.engine_combo, self.sensitivity_combo,
+                  self.region_combo, self.openai_model):
             w.setEnabled(not busy)
         if not busy:
             self._sync_diarize()

@@ -36,3 +36,20 @@ def stt_code(lang: str | None) -> str | None:
 
 def same_language(src: str | None, tgt: str | None) -> bool:
     return bool(src) and base(src) == base(tgt)
+
+
+def guess_from_text(text: str) -> str | None:
+    """不回傳語言的雲端服務，依文字內容粗略判斷（只用來選翻譯方向和內建術語表）。"""
+    if not text:
+        return None
+    kana = sum("぀" <= c <= "ヿ" for c in text)
+    hangul = sum("가" <= c <= "힯" for c in text)
+    cjk = sum("一" <= c <= "鿿" for c in text)
+    latin = sum(c.isascii() and c.isalpha() for c in text)
+    if kana > 0.05 * len(text):
+        return "ja"
+    if hangul > 0.2 * len(text):
+        return "ko"
+    if cjk > latin:
+        return "zh"
+    return "en" if latin else None

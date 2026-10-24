@@ -110,6 +110,7 @@ def test_settings_page_saves_diarization_choice(app, monkeypatch):
     saved = []
     monkeypatch.setattr(sp, "save_settings", lambda s: saved.append(s))
     monkeypatch.setattr(sp.SettingsPage, "refresh_usage", lambda self: None)
+    _fake_keyring(monkeypatch)
     settings = Settings()
     page = sp.SettingsPage(settings)
     page.engine_combo.setCurrentIndex(page.engine_combo.findData("pyannote"))
@@ -133,3 +134,47 @@ def test_output_folder_option(workspace, tmp_path, monkeypatch):
     workspace.out_combo.setCurrentIndex(0)
     workspace._save_options()
     assert workspace.make_spec("x.wav").out_dir is None
+
+
+
+def _fake_keyring(monkeypatch):
+    from omni2.core import secrets
+
+    store = {}
+    fake = type("K", (), {
+        "get_password": lambda self, s, n: store.get(n),
+        "set_password": lambda self, s, n, v: store.__setitem__(n, v),
+        "delete_password": lambda self, s, n: store.pop(n),
+    })()
+    monkeypatch.setattr(secrets, "_keyring", lambda: fake)
+    for env in secrets.ENV_VARS.values():
+        monkeypatch.delenv(env, raising=False)
+    return store
+
+
+def test_settings_page_saves_key_and_finds_region(app, monkeypatch):
+    from omni2.stt import funasr_engine
+    from omni2.ui import settings_page as sp
+
+    monkeypatch.setattr(sp, "save_settings", lambda s: None)
+    monkeypatch.setattr(sp.SettingsPage, "refresh_usage", lambda self: None)
+    store = _fake_keyring(monkeypatch)
+    tried = []
+
+    def fake_check(key, region, model):
+        tried.append(region)
+        return (region == "cn", "ok" if region == "cn" else "InvalidApiKey")
+
+    monkeypatch.setattr(funasr_engine, "check_key", fake_check)
+    # 背景執行緒改成同步執行，測試比較單純
+    monkeypatch.setattr(sp.SettingsPage, "_run", lambda self, fn, done, *a, **k: done(fn(None)))
+    settings = Settings()
+    page = sp.SettingsPage(settings)
+    assert page.key_status["dashscope"].text() == "尚未設定"
+    page.key_edits["dashscope"].setText("sk-secret")
+    page._test_dashscope()
+    assert store == {"dashscope": "sk-secret"}
+    assert page.key_edits["dashscope"].text() == ""  # 存完就清掉，畫面上不留金鑰
+    assert tried == ["intl", "cn"]
+    assert settings.stt.cloud.dashscope_region == "cn"
+    assert page.key_status["dashscope"].text().startswith("✓")

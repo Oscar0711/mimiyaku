@@ -213,7 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--formats", help=f"輸出格式，逗號分隔：{','.join(ALL_FORMATS)}")
     f.add_argument("--bilingual", action="store_true", help="字幕同時顯示譯文和原文")
     f.add_argument("--out", help="輸出資料夾（預設和原檔同資料夾）")
-    f.add_argument("--stt", choices=["faster-whisper", "qwen3-asr"], help="STT 引擎")
+    f.add_argument("--stt", choices=["qwen3-asr", "faster-whisper", "funasr", "openai", "google"],
+                   help="STT 引擎（funasr、openai、google 是雲端服務，需要金鑰）")
     f.add_argument("--stt-model", help="STT 模型，例如 large-v3-turbo、Qwen/Qwen3-ASR-0.6B")
     f.add_argument("--vad", choices=list(PRESETS), help="VAD 情境預設")
     f.add_argument("--model", help="翻譯用的 GGUF 檔")
