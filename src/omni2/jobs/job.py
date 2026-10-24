@@ -101,8 +101,8 @@ class Job:
         return self.dir / "vocals.wav"
 
     @property
-    def speakers_path(self) -> Path:
-        return self.dir / "speakers.json"
+    def diarized_path(self) -> Path:
+        return self.dir / "diarized.json"
 
     @property
     def terms_path(self) -> Path:
@@ -112,11 +112,12 @@ class Job:
     def stt_audio_path(self) -> Path:
         return self.vocals_path if self.spec.separate_vocals else self.audio_path
 
-    def load_speakers(self, fp: str) -> list[str] | None:
-        data = read_json(self.speakers_path)
+    def load_diarized(self, fp: str) -> Transcript | None:
+        """講者分離後的片段（在換人的地方切開過），格式和 transcript.json 相同。"""
+        data = read_json(self.diarized_path)
         if not data or data.get("fp") != fp:
             return None
-        return data["speakers"]
+        return Transcript.from_dict(data)
 
     def load_terms(self, fp: str) -> dict | None:
         data = read_json(self.terms_path)

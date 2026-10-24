@@ -35,6 +35,10 @@ from omni2.workers.stage import Cancelled, WorkerError, run_stage
 log = logging.getLogger(__name__)
 
 EventFn = Callable[[dict], None]
+
+# 階段代號 → 給使用者看的名稱（CLI 和介面共用）
+STAGE_LABELS = {"prepare": "轉檔", "separate": "人聲分離", "stt": "辨識", "diarize": "講者分離",
+                "terms": "抽術語", "translate": "翻譯", "export": "輸出"}
 # 讓使用者確認抽出來的術語：回傳修改後的結果；回傳 None 表示這份檔案不用術語
 ReviewFn = Callable[[Job, TermsResult], "TermsResult | None"]
 
@@ -74,7 +78,7 @@ class FileRunner:
         return [j for j in self.jobs if j.error is None]
 
     def _emit(self, job: Job, stage: str, status: str, **extra) -> None:
-        self.on_event({"type": "stage", "job": job.name, "stage": stage, "status": status, **extra})
+        self.on_event({"type": "stage", "id": job.id, "job": job.name, "stage": stage, "status": status, **extra})
 
     def _fail(self, job: Job, stage: str, message: str, detail: str = "") -> None:
         job.error = f"{stage}：{message}"
@@ -134,8 +138,17 @@ class FileRunner:
 
     def _fp_diarize(self, job: Job) -> str:
         d = self.settings.diarization
-        return fingerprint("diarize", 1, self._fp_stt(job), d.model, d.threshold, d.min_segment,
-                           job.spec.num_speakers)
+        detail = (d.model, d.threshold) if d.engine == "ecapa" else ()
+        return fingerprint("diarize", 3, self._fp_stt(job), d.engine, *detail, job.spec.num_speakers)
+
+    def _fp_text(self, job: Job) -> str:
+        """最終文字的指紋：有講者分離就是分離後的片段，否則是辨識結果。"""
+        return self._fp_diarize(job) if job.spec.diarize else self._fp_stt(job)
+
+    def _text(self, job: Job) -> Transcript | None:
+        if job.spec.diarize:
+            return job.load_diarized(self._fp_diarize(job))
+        return job.load_transcript(self._fp_stt(job))
 
     def _model_name(self) -> str:
         t = self.settings.translate
@@ -154,7 +167,7 @@ class FileRunner:
     def _fp_terms(self, job: Job, transcript: Transcript) -> str:
         t = self.settings
         model = Path(t.terms.model_path or t.translate.model_path).name
-        return fingerprint("terms", TERMS_VERSION, self._fp_stt(job), job.spec.tgt_lang, model,
+        return fingerprint("terms", TERMS_VERSION, self._fp_text(job), job.spec.tgt_lang, model,
                            t.terms.chunk_chars, self._known_terms(transcript.language).digest())
 
     def _job_terms(self, job: Job, transcript: Transcript) -> TermsResult:
@@ -170,7 +183,7 @@ class FileRunner:
         glossary = self._known_terms(transcript.language).merged(terms.glossary())
         summary = hashlib.sha1(terms.summary.encode("utf-8")).hexdigest()[:12]
         return fingerprint(
-            "translate", PROMPT_VERSION, self._fp_stt(job), job.spec.tgt_lang, model, self._style(),
+            "translate", PROMPT_VERSION, self._fp_text(job), job.spec.tgt_lang, model, self._style(),
             t.batch_lines, t.context_lines, t.temperature, t.opencc, glossary.digest(), summary,
         )
 
@@ -271,7 +284,7 @@ class FileRunner:
         todo = []
         for job in jobs:
             fp = self._fp_diarize(job)
-            if job.load_speakers(fp) is not None:
+            if job.load_diarized(fp) is not None:
                 self._emit(job, "diarize", "skip")
             else:
                 todo.append((job, fp))
@@ -279,17 +292,17 @@ class FileRunner:
             return
         d = self.settings.diarization
         payload = {
+            "engine": d.engine,
             "model": d.model,
             "threshold": d.threshold,
-            "min_segment": d.min_segment,
             "items": [{"job": job.id, "fp": fp, "audio": str(job.stt_audio_path),
-                       "transcript": str(job.transcript_path), "out": str(job.speakers_path),
+                       "transcript": str(job.transcript_path), "out": str(job.diarized_path),
                        "num_speakers": job.spec.num_speakers} for job, fp in todo],
         }
 
         def on_done(job: Job, fp: str, ev: dict) -> str:
             job.set_stage("diarize", fp, "done", speakers=ev["speakers"])
-            return f"{ev['speakers']} 位講者"
+            return f"{ev['speakers']} 位講者，{ev['segments']} 句"
 
         self._run_worker("diarize", "omni2.post.diarize:run", payload, todo, on_done)
 
@@ -298,7 +311,7 @@ class FileRunner:
     def _translate(self, jobs: list[Job]) -> None:
         loaded: list[tuple[Job, Transcript]] = []
         for job in jobs:
-            transcript = job.load_transcript(self._fp_stt(job))
+            transcript = self._text(job)
             if transcript is None:
                 self._fail(job, "translate", "找不到辨識結果")
             else:
@@ -435,29 +448,30 @@ class FileRunner:
 
     # ---- 階段 7：排版、輸出 ----
 
+    def load_result(self, job: Job) -> tuple[Transcript, list[str | None] | None] | None:
+        """目前設定下這個 job 的辨識結果（含講者）和譯文；還沒辨識完就回傳 None。"""
+        transcript = self._text(job)
+        if transcript is None:
+            return None
+        translations = None
+        if job.spec.translate:
+            done = job.load_translations(self._fp_translate(job, transcript))
+            translations = [done.get(i) for i in range(len(transcript.segments))]
+        return transcript, translations
+
     def _export(self, jobs: list[Job]) -> None:
         out_cfg, layout = self.settings.output, self.settings.layout
         for job in jobs:
-            transcript = job.load_transcript(self._fp_stt(job))
-            if transcript is None:
+            result = self.load_result(job)
+            if result is None:
                 self._fail(job, "export", "找不到辨識結果")
                 continue
+            transcript, translations = result
             segments = transcript.segments
-            if job.spec.diarize:
-                speakers = job.load_speakers(self._fp_diarize(job))
-                if speakers and len(speakers) == len(segments):
-                    for seg, who in zip(segments, speakers):
-                        seg.speaker = who
-            translations = None
-            if job.spec.translate:
-                done = job.load_translations(self._fp_translate(job, transcript))
-                translations = [done.get(i) for i in range(len(segments))]
-                tag = job.spec.tgt_lang
-            else:
-                tag = transcript.language or "src"
+            tag = job.spec.tgt_lang if job.spec.translate else (transcript.language or "src")
 
             if is_url(job.spec.input):
-                out_dir = Path(job.spec.out_dir or out_cfg.dir or Path.cwd())
+                out_dir = Path(job.spec.out_dir or out_cfg.dir or paths.url_output_dir())
             else:
                 out_dir = Path(job.spec.out_dir or out_cfg.dir or Path(job.spec.input).parent)
             cues = None

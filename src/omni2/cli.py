@@ -37,8 +37,9 @@ class ConsoleReporter:
         if ev["type"] != "stage":
             return
         job, stage, status = ev["job"], ev["stage"], ev["status"]
-        label = {"prepare": "轉檔", "separate": "人聲分離", "stt": "辨識", "diarize": "講者分離",
-                 "terms": "抽術語", "translate": "翻譯", "export": "輸出"}[stage]
+        from omni2.jobs.runner import STAGE_LABELS
+
+        label = STAGE_LABELS[stage]
         if status == "progress":
             pct = int(ev["value"] * 100)
             if self.tty:

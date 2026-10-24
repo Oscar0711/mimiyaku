@@ -47,6 +47,15 @@ class _QueueLogHandler(logging.Handler):
 
 
 def _entry(target: str, payload: dict, q) -> None:
+    import os
+    import sys
+
+    # 從 GUI（pythonw）啟動時沒有主控台，sys.stdout／stderr 是 None，
+    # 子行程裡的 tqdm 進度條一寫就會當掉
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
     root = logging.getLogger()
     root.handlers[:] = [_QueueLogHandler(q)]
     root.setLevel(logging.INFO)

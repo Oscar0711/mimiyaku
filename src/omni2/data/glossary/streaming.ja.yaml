@@ -9,7 +9,7 @@
 - {source: メン限, target: 會員限定, note: 只有頻道會員能看的直播}
 - {source: 初見さん, target: 第一次來的觀眾}
 - {source: 初見, target: 第一次看, note: 第一次來看直播；玩遊戲時指第一次玩}
-- {source: 配信, target: 直播}
+- {source: 配信, target: 直播, note: 指直播；歌曲、影片、遊戲的「配信」是上架、發布}
 - {source: 歌枠, target: 歌回}
 - {source: 雑談枠, target: 雜談}
 - {source: 雑談, target: 雜談}
@@ -33,6 +33,8 @@
 - {source: パパ, target: 爸爸, note: 指角色的建模師；一般語境就是父親}
 - {source: おつ, target: 辛苦了, note: 「お疲れ」的省略}
 - {source: ガチャ, target: 抽卡}
+- {source: アクスタ, target: 壓克力立牌}
+- {source: グッズ, target: 周邊}
 - {source: 天井, target: 保底, note: 抽卡時；一般語境是天花板}
 - {source: 爆死, target: 抽卡大失敗, note: 抽卡時；一般語境不同}
 - {source: ネタバレ, target: 劇透}

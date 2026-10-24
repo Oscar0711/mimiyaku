@@ -23,7 +23,7 @@ def run(payload: dict, emit) -> dict:
 
     model = payload["model"]
     emit({"type": "status", "message": f"載入人聲分離模型 {model}"})
-    model_dir = paths.app_dir() / "models" / "separator"
+    model_dir = paths.models_dir() / "separator"
     model_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="omni2-sep-") as tmp:
         sep = Separator(

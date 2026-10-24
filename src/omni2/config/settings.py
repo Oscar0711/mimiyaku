@@ -64,10 +64,17 @@ class SeparationSettings(BaseModel):
 
 
 class DiarizationSettings(BaseModel):
+    engine: str = "ecapa"  # ecapa（不需帳號）| pyannote（較準，需 Hugging Face 登入）
     model: str = "speechbrain/spkrec-ecapa-voxceleb"
-    # 聲紋的餘弦距離門檻：越小越容易把同一人拆成兩位講者
-    threshold: float = 0.65
-    min_segment: float = 0.8  # 比這短的句子聲紋不可靠，事後依相鄰句子決定講者
+    # ecapa 聚類的餘弦距離門檻：越小越容易把同一人拆成兩位講者，越大越容易把不同人併成一人
+    threshold: float = 0.7
+
+
+class StorageSettings(BaseModel):
+    # 工作檔、模型、llama.cpp 的資料夾；空字串＝%LOCALAPPDATA%\OmniTranslate2
+    data_dir: str = ""
+    # 語音辨識模型（Hugging Face 快取）也放在資料夾裡；否則用系統預設的 ~/.cache/huggingface
+    hf_in_data_dir: bool = False
 
 
 class TermsSettings(BaseModel):
@@ -77,6 +84,17 @@ class TermsSettings(BaseModel):
     ctx_size: int = 8192
     review: bool = True  # CLI 在終端機裡時，抽完先讓使用者確認
     builtin: list[str] = Field(default_factory=lambda: ["streaming"])  # 內建術語表
+
+
+class FileModeSettings(BaseModel):
+    """檔案工作區上次使用的選項，下次開啟時沿用。"""
+
+    src_lang: str | None = None
+    translate: bool = True
+    separate_vocals: bool = False
+    diarize: bool = False
+    num_speakers: int = 0  # 0＝自動判斷
+    terms_first: bool = False
 
 
 class OutputSettings(BaseModel):
@@ -94,6 +112,23 @@ class Settings(BaseModel):
     separation: SeparationSettings = Field(default_factory=SeparationSettings)
     diarization: DiarizationSettings = Field(default_factory=DiarizationSettings)
     terms: TermsSettings = Field(default_factory=TermsSettings)
+    file_mode: FileModeSettings = Field(default_factory=FileModeSettings)
+    storage: StorageSettings = Field(default_factory=StorageSettings)
+
+
+def apply_storage(settings: Settings) -> None:
+    """讓這個行程和之後 spawn 的子行程都使用設定的資料資料夾。"""
+    import os
+
+    paths.set_data_dir(settings.storage.data_dir or None)
+    # 記下使用者原本的 Hugging Face 快取位置，切回「不放在資料夾」時才能還原
+    if "OMNI2_DEFAULT_HF_HOME" not in os.environ:
+        os.environ["OMNI2_DEFAULT_HF_HOME"] = os.environ.get("HF_HOME") or str(
+            Path.home() / ".cache" / "huggingface")
+    if settings.storage.hf_in_data_dir:
+        os.environ["HF_HOME"] = str(paths.hf_dir())
+    else:
+        os.environ["HF_HOME"] = os.environ["OMNI2_DEFAULT_HF_HOME"]
 
 
 def find_llama_server() -> str:
@@ -110,6 +145,7 @@ def load_settings(path: Path | None = None) -> Settings:
         settings = Settings.model_validate(data)
     else:
         settings = Settings()
+    apply_storage(settings)
     if not settings.translate.server_exe or not Path(settings.translate.server_exe).exists():
         detected = find_llama_server()
         if detected:

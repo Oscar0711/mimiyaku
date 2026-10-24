@@ -14,6 +14,7 @@ dependencies = [
     "faster-whisper>=1.1",
     "opencc>=1.1.9",
     "yt-dlp>=2025.1",
+    "PySide6>=6.8",
     # 以下是 M2：Qwen3-ASR、人聲分離、講者分離。都在子行程裡才會 import。
     # torchaudio 在 CUDA 13 只出到 2.11，SpeechBrain 又需要它，所以兩者一起鎖在 2.11。
     "torch==2.11.*",
@@ -22,6 +23,7 @@ dependencies = [
     "audio-separator>=0.47",
     "audioread>=3.0",  # audio-separator 經由 librosa 讀檔時需要，但沒有列在它的相依裡
     "speechbrain>=1.1",
+    "pyannote.audio>=4.0",  # 可選的講者分離引擎；模型需要 Hugging Face 帳號同意條款
 ]
 
 [tool.uv]
@@ -39,6 +41,9 @@ explicit = true
 
 [project.scripts]
 omni2 = "omni2.cli:main"
+
+[project.gui-scripts]
+omni2-gui = "omni2.ui.app:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

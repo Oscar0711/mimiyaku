@@ -71,7 +71,120 @@ SAMPLES: dict[str, list[tuple[str, str]]] = {
         ("ja-JP-NanamiNeural", "私と田中さんでやります。"),
         ("ja-JP-KeitaNeural", "よろしくお願いします。次回は来週の水曜日に確認しましょう。"),
     ],
+    # 三位女性快速聊天、很多短回應：講者分離的困難樣本（後兩位是會講日文的多語言語音）
+    "chat_ja": [
+        ("ja-JP-NanamiNeural", "ねえ、昨日のライブ見た？"),
+        ("en-US-AvaMultilingualNeural", "見た見た！"),
+        ("ja-JP-NanamiNeural", "最後の曲、すごくよかったよね。"),
+        ("en-US-EmmaMultilingualNeural", "え、私見てない。何の曲だったの？"),
+        ("en-US-AvaMultilingualNeural", "新曲だよ。まだ配信されてないやつ。"),
+        ("en-US-EmmaMultilingualNeural", "えー、うそ。"),
+        ("ja-JP-NanamiNeural", "アーカイブ残ってるから、今日中に見たほうがいいよ。"),
+        ("en-US-EmmaMultilingualNeural", "わかった、帰ったら見る。"),
+        ("en-US-AvaMultilingualNeural", "あとね、グッズも出るんだって。"),
+        ("ja-JP-NanamiNeural", "そうそう。Tシャツとアクスタ。"),
+        ("en-US-EmmaMultilingualNeural", "アクスタほしい！"),
+        ("en-US-AvaMultilingualNeural", "来週の金曜日から予約開始らしいよ。"),
+        ("ja-JP-NanamiNeural", "じゃあ、みんなで一緒に買おうか。"),
+        ("en-US-EmmaMultilingualNeural", "うん、そうしよう。"),
+        ("en-US-AvaMultilingualNeural", "決まりだね。"),
+    ],
+    # 兩位男主持人＋一位女來賓、停頓很短
+    "podcast_en": [
+        ("en-US-GuyNeural", "Welcome back to the show. Today we've got a special guest."),
+        ("en-US-JennyNeural", "Thanks for having me."),
+        ("en-US-ChristopherNeural", "Great to have you here. So, how did you get started?"),
+        ("en-US-JennyNeural", "Honestly, by accident. I just started posting videos during the lockdown."),
+        ("en-US-GuyNeural", "Right."),
+        ("en-US-JennyNeural", "And people kept watching, so I kept going."),
+        ("en-US-ChristopherNeural", "That's amazing. Did you ever expect it to grow this big?"),
+        ("en-US-JennyNeural", "Not at all."),
+        ("en-US-GuyNeural", "What was the hardest part?"),
+        ("en-US-JennyNeural", "Probably staying consistent. Some weeks I had no ideas at all."),
+        ("en-US-ChristopherNeural", "I can relate to that."),
+        ("en-US-GuyNeural", "Yeah, same here."),
+        ("en-US-ChristopherNeural", "Okay, one last question before we wrap up."),
+        ("en-US-JennyNeural", "Sure, go ahead."),
+        ("en-US-ChristopherNeural", "What advice would you give someone just starting out?"),
+        ("en-US-JennyNeural", "Just start. Your first videos will be bad, and that's fine."),
+        ("en-US-GuyNeural", "Great advice. Thanks so much for coming."),
+    ],
 }
+
+# 句間停頓（秒）；對話樣本接得比較快
+PAUSES = {"chat_ja": (0.15, 0.5), "podcast_en": (0.15, 0.5)}
+
+_K, _N, _A = "ja-JP-KeitaNeural", "ja-JP-NanamiNeural", "en-US-AvaMultilingualNeural"
+# 依時間軸混音的樣本：（語音, 文字, 和上一句結尾的間隔秒數）。間隔是負的代表重疊（插話、附和）。
+# 每句前後的靜音會先切掉，間隔才是真正的「接話速度」。
+TIMELINE_SAMPLES: dict[str, list[tuple[str, str, float]]] = {
+    # 三人快速接話、很多一兩個字的短回應
+    "quick_ja": [
+        (_K, "今日の会議、何時からだっけ？", 0.0),
+        (_N, "三時から。", 0.10),
+        (_K, "え、もう？", 0.08),
+        (_A, "うん、あと十分しかないよ。", 0.10),
+        (_K, "やばい、資料まだ印刷してない。", 0.12),
+        (_N, "私やっとくよ。", 0.06),
+        (_K, "ほんと？助かる。", 0.10),
+        (_A, "会議室はどこ？", 0.15),
+        (_N, "二階の大きい部屋。", 0.08),
+        (_A, "了解。", 0.05),
+        (_K, "じゃあ先に行ってて。", 0.10),
+        (_N, "はーい。", 0.08),
+        (_A, "後でね。", 0.10),
+    ],
+    # 對方還沒講完就附和或插話
+    "overlap_ja": [
+        (_K, "昨日さ、駅前で偶然、高校の時の先生に会ったんだよね。", 0.0),
+        (_N, "へえ！", -0.6),
+        (_K, "全然変わってなくてびっくりした。", 0.10),
+        (_N, "うんうん。", -0.5),
+        (_N, "それで、何か話したの？", 0.20),
+        (_K, "ちょっとだけね。今度、同窓会やるらしいよ。", 0.10),
+        (_A, "え、私も行きたい！", -0.4),
+        (_K, "もちろん、みんなに連絡するつもり。", 0.10),
+        (_N, "いつやるの？", 0.10),
+        (_K, "来月の第二土曜日だって。", 0.05),
+        (_A, "あ、その日空いてる。", -0.3),
+        (_N, "私も大丈夫。", 0.10),
+    ],
+}
+
+
+def _trim(audio: np.ndarray, threshold: float = 0.01) -> np.ndarray:
+    loud = np.nonzero(np.abs(audio) > threshold)[0]
+    return audio[loud[0]: loud[-1] + 1] if len(loud) else audio
+
+
+async def build_timeline(name: str, lines: list[tuple[str, str, float]], out_dir: Path) -> Path:
+    clips = []
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, (voice, text, _) in enumerate(lines):
+            mp3, wav = Path(tmp) / f"{i}.mp3", Path(tmp) / f"{i}.wav"
+            await _speak(voice, text, mp3)
+            decode_to_wav(mp3, wav)
+            clips.append(_trim(read_wav(wav)))
+    refs, t, end = [], 0.8, 0.8
+    placed = []
+    for (voice, text, gap), clip in zip(lines, clips):
+        start = max(0.0, end + gap) if refs else t
+        placed.append((int(start * SAMPLE_RATE), clip))
+        end = start + len(clip) / SAMPLE_RATE
+        refs.append({"start": round(start, 2), "end": round(end, 2), "text": text, "speaker": voice})
+    total = max(s + len(c) for s, c in placed) + int(0.8 * SAMPLE_RATE)
+    mix = np.zeros(total, np.float32)
+    for s, c in placed:
+        mix[s: s + len(c)] += c
+    pcm = (np.clip(mix, -1, 1) * 32767).astype(np.int16)
+    path = out_dir / f"{name}.wav"
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SAMPLE_RATE)
+        w.writeframes(pcm.tobytes())
+    (out_dir / f"{name}.ref.json").write_text(json.dumps(refs, ensure_ascii=False, indent=1), encoding="utf-8")
+    return path
 
 
 async def _speak(voice: str, text: str, out: Path) -> None:
@@ -95,7 +208,7 @@ async def build(name: str, lines: list[tuple[str, str]], out_dir: Path, rng: ran
                          "text": text, "speaker": voice})
             chunks.append(audio)
             t += len(audio) / SAMPLE_RATE
-            pause = np.zeros(int(SAMPLE_RATE * rng.uniform(0.5, 1.3)), np.float32)
+            pause = np.zeros(int(SAMPLE_RATE * rng.uniform(*PAUSES.get(name, (0.5, 1.3)))), np.float32)
             chunks.append(pause)
             t += len(pause) / SAMPLE_RATE
     pcm = (np.clip(np.concatenate(chunks), -1, 1) * 32767).astype(np.int16)
@@ -164,6 +277,9 @@ async def main(out_dir: Path) -> None:
         if not (out_dir / f"{name}.wav").exists():
             print(await build(name, lines, out_dir, rng))
     print(add_bgm(out_dir / "stream_ja.wav", out_dir / "stream_ja_bgm.wav"))
+    for name, lines in TIMELINE_SAMPLES.items():
+        if not (out_dir / f"{name}.wav").exists():
+            print(await build_timeline(name, lines, out_dir))
 
 
 if __name__ == "__main__":

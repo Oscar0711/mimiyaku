@@ -10,3 +10,8 @@ dist/
 samples/
 out/
 *.gguf
+
+# 介面從專案資料夾啟動時誤存的字幕
+/*.srt
+/*.vtt
+/*.ass
