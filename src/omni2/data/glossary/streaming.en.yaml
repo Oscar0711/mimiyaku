@@ -1,0 +1,19 @@
+# 內建術語表：英文直播用語 → 台灣觀眾習慣的說法（英文詞用整詞比對）
+- {source: chat, target: 聊天室, note: 直播時指聊天室；一般語境是聊天}
+- {source: donation, target: 斗內}
+- {source: donations, target: 斗內}
+- {source: superchat, target: SC}
+- {source: raid, target: 揪團轉台, note: Twitch 帶觀眾去另一個頻道}
+- {source: VOD, target: 存檔}
+- {source: clip, target: 精華, note: 直播精華片段}
+- {source: mod, target: 管理員, note: 聊天室管理員}
+- {source: mods, target: 管理員}
+- {source: emote, target: 表情符號}
+- {source: lurker, target: 潛水的觀眾}
+- {source: lurkers, target: 潛水的觀眾}
+- {source: collab, target: 連動}
+- {source: stream, target: 直播}
+- {source: streamer, target: 實況主}
+- {source: subs, target: 訂閱, note: 訂閱數或訂閱者}
+- {source: subscribers, target: 訂閱者}
+- {source: GG, target: GG}

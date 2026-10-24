@@ -1,0 +1,41 @@
+# 內建術語表：日文直播（VTuber）用語 → 台灣觀眾習慣的說法
+# 只用在翻譯，不會當作語音辨識的提示詞。使用者自己的術語表優先。
+- {source: 草, target: 笑死, note: "網路用語，表示好笑；「草原」「雑草」等一般詞不適用"}
+- {source: 大草原, target: 笑爛, note: 非常好笑}
+- {source: スパチャ, target: SC, note: Super Chat，付費留言}
+- {source: スーパーチャット, target: SC, note: 付費留言}
+- {source: 赤スパ, target: 紅SC, note: 高額的付費留言}
+- {source: メンバーシップ, target: 會員, note: 頻道會員}
+- {source: メン限, target: 會員限定, note: 只有頻道會員能看的直播}
+- {source: 初見さん, target: 第一次來的觀眾}
+- {source: 初見, target: 第一次看, note: 第一次來看直播；玩遊戲時指第一次玩}
+- {source: 配信, target: 直播}
+- {source: 歌枠, target: 歌回}
+- {source: 雑談枠, target: 雜談}
+- {source: 雑談, target: 雜談}
+- {source: 枠, target: 直播, note: 一場直播；「次の枠」＝下一場直播}
+- {source: 待機所, target: 待機台}
+- {source: 耐久配信, target: 耐久直播}
+- {source: 切り抜き, target: 精華剪輯}
+- {source: 同接, target: 同接, note: 同時觀看人數}
+- {source: アーカイブ, target: 存檔, note: 直播結束後保留的影片}
+- {source: コラボ, target: 連動}
+- {source: オフコラボ, target: 線下連動, note: 本人實際碰面一起直播}
+- {source: 凸待ち, target: 等人連線, note: 開放其他人打進來一起直播}
+- {source: リスナー, target: 觀眾}
+- {source: 推し, target: 推, note: 最支持的偶像或角色}
+- {source: 箱推し, target: 箱推, note: 支持整個團體}
+- {source: てぇてぇ, target: 尊, note: 成員之間的互動很美好}
+- {source: 尊い, target: 尊}
+- {source: ガチ恋, target: 真愛粉}
+- {source: 卒業, target: 畢業, note: VTuber 引退}
+- {source: ママ, target: 媽媽, note: 指角色的繪師；一般語境就是母親}
+- {source: パパ, target: 爸爸, note: 指角色的建模師；一般語境就是父親}
+- {source: おつ, target: 辛苦了, note: 「お疲れ」的省略}
+- {source: ガチャ, target: 抽卡}
+- {source: 天井, target: 保底, note: 抽卡時；一般語境是天花板}
+- {source: 爆死, target: 抽卡大失敗, note: 抽卡時；一般語境不同}
+- {source: ネタバレ, target: 劇透}
+- {source: エモい, target: 好有感}
+- {source: ワンチャン, target: 說不定有機會}
+- {source: 神回, target: 神回}

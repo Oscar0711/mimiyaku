@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+
+# 本機樣本與輸出
+samples/
+out/
+*.gguf
