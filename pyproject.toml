@@ -1,5 +1,5 @@
 [project]
-name = "omni2"
+name = "mimiyaku"
 version = "0.1.0"
 description = "Mimiyaku：本地語音辨識與字幕翻譯"
 readme = "README.md"
