@@ -329,3 +329,18 @@ def test_feedback_issue_url_has_environment_but_no_paths():
     env = query["environment"][0]
     assert "Test GPU（16 GB）" in env and "HY-MT2-7B-Q6_K.gguf" in env and "someone" not in env
     assert "environment" not in feedback.issue_url("feature", s, None)
+
+
+def test_progress_signals_carry_sizes_over_2gb(app):
+    from omni2.ui.models_page import DownloadQueue
+    from omni2.ui.tasks import Task
+
+    big, total = 6_163_000_000, 7_000_000_000  # 超過 32 位元整數的上限
+    got = []
+    queue = DownloadQueue(13.4)
+    queue.progress.connect(lambda *args: got.append(args))
+    queue.progress.emit("hy-mt2-7b-q6", big, total, "")
+    task = Task(lambda t: None)
+    task.progress.connect(lambda *args: got.append(args))
+    task.progress.emit(big, total, "x")
+    assert got == [("hy-mt2-7b-q6", big, total, ""), (big, total, "x")]

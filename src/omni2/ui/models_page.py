@@ -36,7 +36,8 @@ COLUMNS = ["類別", "模型", "說明", "大小", "狀態", ""]
 
 
 class DownloadQueue(QThread):
-    progress = Signal(str, int, int, str)  # （模型, 已下載, 總共, 說明）
+    # （模型, 已下載, 總共, 說明）。位元組數用 object：宣告成 int 會被 Qt 當成 32 位元，超過 2 GB 就變負數
+    progress = Signal(str, object, object, str)
     item_done = Signal(str, object)
     item_failed = Signal(str, str)
 

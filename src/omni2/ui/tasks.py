@@ -11,7 +11,7 @@ from omni2.core import storage
 
 
 class Task(QThread):
-    progress = Signal(int, int, str)
+    progress = Signal(object, object, str)  # 位元組數可能超過 2 GB，不能用 int（Qt 會當成 32 位元）
     done = Signal(object)
     failed = Signal(str)
 
