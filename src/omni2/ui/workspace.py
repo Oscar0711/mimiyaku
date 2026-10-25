@@ -34,6 +34,7 @@ from omni2.core import paths
 from omni2.export.formats import ALL_FORMATS
 from omni2.jobs.job import Job, JobSpec, is_url, job_id
 from omni2.jobs.runner import STAGE_LABELS, FileRunner
+from omni2.models.recommend import missing_for
 from omni2.translate.glossary import Glossary
 from omni2.ui.bridge import RunnerThread
 from omni2.ui.player import PlayerPanel
@@ -261,6 +262,10 @@ class FileWorkspace(QWidget):
         self.settings.output.dir = self.out_edit.text() if custom else None
         save_settings(self.settings)
 
+    def sync_from_settings(self) -> None:
+        """設定分頁改了辨識引擎（例如套用推薦）之後，更新這裡的選項。"""
+        self.engine_combo.setCurrentIndex(max(0, self.engine_combo.findData(self.settings.stt.engine)))
+
     def make_spec(self, input: str) -> JobSpec:
         fm, out = self.settings.file_mode, self.settings.output
         return JobSpec(
@@ -376,6 +381,11 @@ class FileWorkspace(QWidget):
         self._save_options()
         todo = [e for e in self.entries.values() if e.state != "done"]
         if not todo:
+            return
+        fm = self.settings.file_mode
+        missing = missing_for(self.settings, live=False, translate=fm.translate or fm.terms_first)
+        if missing:
+            QMessageBox.warning(self, "缺少模型", "\n".join(missing) + "\n\n請到「設定 → 硬體與模型」下載。")
             return
         for e in todo:
             e.spec = self.make_spec(e.input)

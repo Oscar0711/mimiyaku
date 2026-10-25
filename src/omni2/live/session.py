@@ -86,11 +86,12 @@ class LiveSession:
             self.stt = LiveSttProcess(self._stt_config())
             self.stt.start()
             if live.translate and tcfg.enabled:
-                self.on_event({"type": "status", "message": f"啟動翻譯模型 {Path(tcfg.model_path).name}…"})
+                model = live.translate_model_path or tcfg.model_path
+                self.on_event({"type": "status", "message": f"啟動翻譯模型 {Path(model).name}…"})
                 if tcfg.endpoint:
                     self.client = ChatClient(tcfg.endpoint, model=tcfg.endpoint_model)
                 else:
-                    self.server = LlamaServer(tcfg.server_exe, tcfg.model_path, ctx_size=tcfg.ctx_size,
+                    self.server = LlamaServer(tcfg.server_exe, model, ctx_size=tcfg.ctx_size,
                                               gpu_layers=tcfg.gpu_layers, extra_args=tcfg.server_args)
                     self.client = ChatClient(self.server.start())
                 self.translator = LiveTranslator(self.client, tcfg.target, self._glossary_for,

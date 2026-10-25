@@ -1,14 +1,18 @@
-"""設定分頁：工作檔與模型的儲存位置、雲端語音辨識的金鑰、講者分離引擎。"""
+"""設定分頁。左邊是目錄，右邊一次顯示一頁：
+
+硬體與模型、辨識與翻譯、雲端語音辨識、講者分離、儲存位置、其他（捷徑、還原預設值）。
+"""
 
 from __future__ import annotations
 
-import threading
+import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGridLayout,
@@ -16,22 +20,34 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QMessageBox,
     QProgressDialog,
     QPushButton,
     QScrollArea,
+    QSpinBox,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from omni2 import __version__
 from omni2.config.settings import Settings, save_settings
-from omni2.core import paths, secrets, storage
+from omni2.core import hardware, paths, secrets, shortcut, storage
+from omni2.models import catalog
+from omni2.models.recommend import reset_settings
 from omni2.post.diarize import DEFAULT_THRESHOLD, PYANNOTE_MODEL
+from omni2.ui.models_page import ModelsPanel
+from omni2.ui.tasks import Task as _Worker
+from omni2.ui.tasks import run_task
 
 # 講者區分靈敏度 → ecapa 聚類門檻（距離越小越容易分成不同人）
 SENSITIVITY = [("一般（建議）", DEFAULT_THRESHOLD),
                ("較敏感：不同的人常被併成同一人時", DEFAULT_THRESHOLD - 0.1),
                ("較寬鬆：同一人常被拆成好幾人時", DEFAULT_THRESHOLD + 0.1)]
+QWEN_MODELS = [("Qwen/Qwen3-ASR-1.7B", "1.7B（最準）"), ("Qwen/Qwen3-ASR-0.6B", "0.6B（較快、省顯示記憶體）")]
+WHISPER_MODELS = [("large-v3-turbo", "large-v3-turbo（建議）"), ("small", "small（CPU 用）")]
+OTHER_FILE = "__browse__"
 
 
 def storage_secret_path() -> str:
@@ -39,45 +55,274 @@ def storage_secret_path() -> str:
     return secrets.get_secret("google") or ""
 
 
-class _Worker(QThread):
-    """在背景執行耗時的檔案操作（算空間、搬移）。"""
-
-    progress = Signal(int, int, str)
-    done = Signal(object)
-    failed = Signal(str)
-
-    def __init__(self, fn, parent=None):
-        super().__init__(parent)
-        self.fn = fn
-        self.cancel = threading.Event()
-
-    def run(self) -> None:
-        try:
-            self.done.emit(self.fn(self))
-        except storage.StorageCancelled:
-            self.failed.emit("已取消。已經搬過去的檔案會留在新位置，原本的檔案沒有刪除。")
-        except Exception as e:  # noqa: BLE001
-            self.failed.emit(f"{type(e).__name__}: {e}")
+def _page(*widgets: QWidget) -> QScrollArea:
+    inner = QWidget()
+    lay = QVBoxLayout(inner)
+    for w in widgets:
+        lay.addWidget(w)
+    lay.addStretch()
+    scroll = QScrollArea()
+    scroll.setWidgetResizable(True)
+    scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+    scroll.setWidget(inner)
+    return scroll
 
 
 class SettingsPage(QWidget):
+    settings_changed = Signal()  # 其他分頁要重新讀設定（例如辨識引擎）
+    restart_requested = Signal()
+
     def __init__(self, settings: Settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        inner = QWidget()
-        layout = QVBoxLayout(inner)
-        layout.addWidget(self._storage_box())
-        layout.addWidget(self._cloud_box())
-        layout.addWidget(self._diarize_box())
-        layout.addStretch()
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        scroll.setWidget(inner)
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(scroll)
+        self.models = ModelsPanel(settings)
+        self.models.settings_changed.connect(self.reload_from_settings)
+        self.sections = [
+            ("硬體與模型", self.models),
+            ("辨識與翻譯", _page(self._engines_box(), self._layout_box())),
+            ("雲端語音辨識", _page(self._cloud_box())),
+            ("講者分離", _page(self._diarize_box())),
+            ("儲存位置", _page(self._storage_box())),
+            ("其他", _page(self._other_box())),
+        ]
+        self.nav = QListWidget()
+        self.nav.setFixedWidth(150)
+        self.nav.setStyleSheet("QListWidget::item { padding: 6px 8px; }")
+        self.stack = QStackedWidget()
+        for name, widget in self.sections:
+            self.nav.addItem(name)
+            self.stack.addWidget(widget)
+        self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.nav.setCurrentRow(0)
+        outer = QHBoxLayout(self)
+        outer.addWidget(self.nav)
+        outer.addWidget(self.stack, 1)
         self.refresh_usage()
+
+    def show_section(self, name: str) -> None:
+        self.nav.setCurrentRow([n for n, _ in self.sections].index(name))
+
+    def reload_from_settings(self) -> None:
+        self._sync_engines()
+        self.settings_changed.emit()
+
+    # ---- 辨識與翻譯 ----
+
+    def _engines_box(self) -> QGroupBox:
+        box = QGroupBox("模型")
+        self.file_qwen = self._choice_combo(QWEN_MODELS)
+        self.file_whisper = self._choice_combo(WHISPER_MODELS)
+        self.live_qwen = self._choice_combo(QWEN_MODELS)
+        self.live_whisper = self._choice_combo(WHISPER_MODELS)
+        self.translate_model = QComboBox()
+        self.live_translate_model = QComboBox()
+        self.server_label = QLabel()
+        self.server_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.server_label.setWordWrap(True)
+
+        form = QFormLayout(box)
+        form.addRow(QLabel("<b>檔案翻譯</b>"))
+        form.addRow("Qwen3-ASR 模型", self.file_qwen)
+        form.addRow("Whisper 模型", self.file_whisper)
+        form.addRow("翻譯模型", self.translate_model)
+        form.addRow(QLabel("<b>即時翻譯</b>（辨識和翻譯模型同時放在顯示卡上）"))
+        form.addRow("Qwen3-ASR 模型", self.live_qwen)
+        form.addRow("Whisper 模型", self.live_whisper)
+        form.addRow("翻譯模型", self.live_translate_model)
+        form.addRow(QLabel("<b>翻譯推論程式</b>"))
+        form.addRow("llama-server", self.server_label)
+        note = QLabel("辨識引擎在「檔案翻譯」「即時翻譯」分頁選擇。標「未下載」的模型可以到「硬體與模型」下載；"
+                      "語音辨識模型沒下載的話，第一次使用時也會自動下載。")
+        note.setWordWrap(True)
+        note.setStyleSheet("color: #666;")
+        form.addRow(note)
+        self._sync_engines()
+        for combo in (self.file_qwen, self.file_whisper, self.live_qwen, self.live_whisper):
+            combo.currentIndexChanged.connect(self._save_engines)
+        self.translate_model.activated.connect(lambda _i: self._pick_translate(self.translate_model))
+        self.live_translate_model.activated.connect(lambda _i: self._pick_translate(self.live_translate_model))
+        return box
+
+    @staticmethod
+    def _choice_combo(choices: list[tuple[str, str]]) -> QComboBox:
+        combo = QComboBox()
+        for value, label in choices:
+            combo.addItem(label, value)
+        return combo
+
+    @staticmethod
+    def _select(combo: QComboBox, value) -> None:
+        combo.blockSignals(True)
+        index = combo.findData(value)
+        if index < 0 and value:  # 設定檔裡手動填的值：照樣顯示
+            combo.addItem(str(value), value)
+            index = combo.count() - 1
+        combo.setCurrentIndex(max(0, index))
+        combo.blockSignals(False)
+
+    def _gguf_choices(self) -> list[tuple[str, str]]:
+        """目錄裡的翻譯模型（標出沒下載的），加上資料資料夾裡其他的 GGUF。"""
+        out = []
+        for m in catalog.CATALOG:
+            if m.kind == "hf_file":
+                state = "" if catalog.is_installed(m) else "（未下載）"
+                out.append((str(catalog.file_path(m)), f"{m.label}{state}　{m.note}"))
+        known = {Path(p).name.casefold() for p, _ in out}
+        for f in sorted(paths.models_dir().glob("*.gguf")):
+            if f.name.casefold() not in known:
+                out.append((str(f), f.name))
+        return out
+
+    def _fill_translate(self, combo: QComboBox, current: str, same_option: bool) -> None:
+        combo.blockSignals(True)
+        combo.clear()
+        if same_option:
+            combo.addItem("和檔案翻譯相同", "")
+        for path, label in self._gguf_choices():
+            combo.addItem(label, path)
+        index = next((i for i in range(combo.count())
+                      if combo.itemData(i) and current and Path(combo.itemData(i)) == Path(current)), -1)
+        if index < 0 and current:
+            combo.addItem(Path(current).name + ("" if Path(current).exists() else "（找不到檔案）"), current)
+            index = combo.count() - 1
+        combo.addItem("選擇其他 GGUF 檔案…", OTHER_FILE)
+        combo.setCurrentIndex(max(0, index))
+        combo.blockSignals(False)
+
+    def _sync_engines(self) -> None:
+        """從設定重新填入（套用推薦、下載完模型之後也會呼叫）。"""
+        s = self.settings
+        self._select(self.file_qwen, s.stt.qwen_model)
+        self._select(self.file_whisper, s.stt.model)
+        self._select(self.live_qwen, s.live.qwen_model)
+        self._select(self.live_whisper, s.live.whisper_model)
+        self._fill_translate(self.translate_model, s.translate.model_path, False)
+        self._fill_translate(self.live_translate_model, s.live.translate_model_path, True)
+        exe = s.translate.server_exe
+        if s.translate.endpoint:
+            self.server_label.setText(f"使用外部服務：{s.translate.endpoint}")
+        elif exe and Path(exe).exists():
+            self.server_label.setText(f"{Path(exe).parent.name}　{exe}")
+        else:
+            self.server_label.setText("還沒有安裝，請到「硬體與模型」下載 llama.cpp")
+
+    def _save_engines(self) -> None:
+        s = self.settings
+        s.stt.qwen_model = self.file_qwen.currentData()
+        s.stt.model = self.file_whisper.currentData()
+        s.live.qwen_model = self.live_qwen.currentData()
+        s.live.whisper_model = self.live_whisper.currentData()
+        s.translate.model_path = self.translate_model.currentData() or s.translate.model_path
+        s.live.translate_model_path = self.live_translate_model.currentData() or ""
+        save_settings(s)
+        self.models.refresh()
+
+    def _pick_translate(self, combo: QComboBox) -> None:
+        if combo.currentData() == OTHER_FILE:
+            path, _ = QFileDialog.getOpenFileName(self, "選擇翻譯模型", str(paths.models_dir()), "GGUF (*.gguf)")
+            if path:
+                if combo is self.translate_model:
+                    self.settings.translate.model_path = str(Path(path))
+                else:
+                    self.settings.live.translate_model_path = str(Path(path))
+                save_settings(self.settings)
+            self._sync_engines()
+            self.models.refresh()
+            return
+        self._save_engines()
+
+    def _layout_box(self) -> QGroupBox:
+        lay = self.settings.layout
+        box = QGroupBox("字幕排版（檔案翻譯輸出的字幕）")
+        self.line_width = QSpinBox()
+        self.line_width.setRange(8, 40)
+        self.line_width.setValue(lay.max_line_width // 2)
+        self.line_width.setSuffix(" 個中文字")
+        self.max_lines = QSpinBox()
+        self.max_lines.setRange(1, 3)
+        self.max_lines.setValue(lay.max_lines)
+        self.max_lines.setSuffix(" 行")
+        self.max_cps = QDoubleSpinBox()
+        self.max_cps.setRange(4.0, 20.0)
+        self.max_cps.setSingleStep(0.5)
+        self.max_cps.setValue(lay.max_cps)
+        self.max_cps.setSuffix(" 字／秒")
+        self.max_cps.setToolTip("每句字幕至少顯示到讀得完的時間；英文等半形字算半個字")
+        for w in (self.line_width, self.max_lines, self.max_cps):
+            w.valueChanged.connect(self._save_layout)
+        form = QFormLayout(box)
+        form.addRow("每行最多", self.line_width)
+        form.addRow("每句最多", self.max_lines)
+        form.addRow("閱讀速度上限", self.max_cps)
+        return box
+
+    def _save_layout(self) -> None:
+        lay = self.settings.layout
+        lay.max_line_width = self.line_width.value() * 2
+        lay.max_lines = self.max_lines.value()
+        lay.max_cps = self.max_cps.value()
+        save_settings(self.settings)
+
+    # ---- 其他 ----
+
+    def _other_box(self) -> QGroupBox:
+        box = QGroupBox("其他")
+        self.shortcut_label = QLabel()
+        desktop = QPushButton("在桌面建立捷徑")
+        desktop.clicked.connect(lambda: self._make_shortcut(shortcut.desktop_dir(), "桌面"))
+        start_menu = QPushButton("加到開始功能表")
+        start_menu.clicked.connect(lambda: self._make_shortcut(shortcut.start_menu_dir(), "開始功能表"))
+        row = QHBoxLayout()
+        row.addWidget(desktop)
+        row.addWidget(start_menu)
+        row.addStretch()
+
+        self.reset_button = QPushButton("還原預設設定…")
+        self.reset_button.clicked.connect(self._reset)
+        reset_note = QLabel("金鑰、儲存位置、已下載的模型不受影響；模型會依這台電腦的硬體重新推薦。")
+        reset_note.setStyleSheet("color: #666;")
+        open_dir = QPushButton("開啟設定檔資料夾")
+        open_dir.clicked.connect(lambda: os.startfile(paths.app_dir()))  # noqa: S606
+
+        lay = QVBoxLayout(box)
+        lay.addWidget(QLabel("<b>啟動捷徑</b>（點兩下就能開啟，不需要終端機）"))
+        lay.addLayout(row)
+        lay.addWidget(self.shortcut_label)
+        lay.addSpacing(12)
+        lay.addWidget(QLabel("<b>設定</b>"))
+        for w in (self.reset_button, reset_note, open_dir):
+            lay.addWidget(w, 0, Qt.AlignmentFlag.AlignLeft)
+        lay.addSpacing(12)
+        lay.addWidget(QLabel(f"OmniTranslate {__version__}　設定檔：{paths.config_path()}"))
+        self._show_shortcuts()
+        return box
+
+    def _show_shortcuts(self) -> None:
+        places = [name for name, folder in (("桌面", shortcut.desktop_dir()), ("開始功能表", shortcut.start_menu_dir()))
+                  if shortcut.shortcut_path(folder).exists()]
+        self.shortcut_label.setText(f"已建立：{'、'.join(places)}" if places else "還沒有建立捷徑")
+
+    def _make_shortcut(self, folder: Path, place: str) -> None:
+        try:
+            path = shortcut.create(folder)
+        except Exception as e:  # noqa: BLE001
+            QMessageBox.warning(self, "建立捷徑", f"建立失敗：{e}")
+            return
+        self._show_shortcuts()
+        QMessageBox.information(self, "建立捷徑", f"已在{place}建立捷徑：\n{path}")
+
+    def _reset(self) -> None:
+        answer = QMessageBox.question(
+            self, "還原預設設定",
+            "要把所有設定還原成預設值嗎？\n\n金鑰、儲存位置、已下載的模型不受影響；"
+            "辨識和翻譯模型會依這台電腦的硬體重新推薦。\n還原後需要重新開啟程式。")
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        reset_settings(self.settings, self.models.hw or hardware.detect(paths.data_dir()))
+        save_settings(self.settings)
+        if QMessageBox.question(self, "還原預設設定", "已還原。要現在重新開啟程式嗎？") \
+                == QMessageBox.StandardButton.Yes:
+            self.restart_requested.emit()
 
     # ---- 雲端語音辨識 ----
 
@@ -351,6 +596,8 @@ class SettingsPage(QWidget):
             dialog.close()
             self.dir_edit.setText(str(paths.data_dir()))
             self.refresh_usage()
+            self._sync_engines()  # 翻譯模型的路徑跟著搬了
+            self.models.refresh()
             QMessageBox.information(self, "搬移資料", f"完成。之後的工作檔與模型都會放在：\n{paths.data_dir()}")
 
         def fail(_message: str) -> None:
@@ -375,20 +622,7 @@ class SettingsPage(QWidget):
         self._run(lambda _w: storage.clear_jobs(), done)
 
     def _run(self, fn, on_done, on_progress=None, on_fail=None) -> _Worker:
-        worker = _Worker(fn, self)
-        worker.done.connect(on_done)
-        if on_progress:
-            worker.progress.connect(on_progress)
-
-        def failed(message: str) -> None:
-            if on_fail:
-                on_fail(message)
-            QMessageBox.warning(self, "發生錯誤", message)
-
-        worker.failed.connect(failed)
-        worker.finished.connect(worker.deleteLater)
-        worker.start()
-        return worker
+        return run_task(self, fn, on_done, on_progress, on_fail)
 
     # ---- 講者分離 ----
 
@@ -455,9 +689,11 @@ class SettingsPage(QWidget):
         self._run(work, self.login_label.setText)
 
     def set_busy(self, busy: bool) -> None:
-        """檔案工作區在處理時，不能搬移或清除。"""
+        """檔案或即時翻譯在處理時，不能搬移、清除、換模型或還原設定。"""
         for w in (self.apply_button, self.clear_button, self.engine_combo, self.sensitivity_combo,
-                  self.region_combo, self.openai_model):
+                  self.region_combo, self.openai_model, self.reset_button, self.file_qwen, self.file_whisper,
+                  self.live_qwen, self.live_whisper, self.translate_model, self.live_translate_model):
             w.setEnabled(not busy)
+        self.models.set_busy(busy)
         if not busy:
             self._sync_diarize()

@@ -123,6 +123,8 @@ class LiveSettings(BaseModel):
     max_utterance_ms: int = 8000
     src_lang: str | None = None
     translate: bool = True
+    # 即時翻譯要和辨識模型同時放在顯示卡上，顯示記憶體不夠時可以改用較小的翻譯模型；空字串＝和檔案翻譯相同
+    translate_model_path: str = ""
     context_lines: int = 3
     # 懸浮字幕
     font_size: int = 26
@@ -162,6 +164,7 @@ class Settings(BaseModel):
     file_mode: FileModeSettings = Field(default_factory=FileModeSettings)
     live: LiveSettings = Field(default_factory=LiveSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
+    first_run_done: bool = False  # 第一次開啟介面時的硬體偵測與模型下載精靈
 
 
 def apply_storage(settings: Settings) -> None:
@@ -181,9 +184,10 @@ def apply_storage(settings: Settings) -> None:
 
 def find_llama_server() -> str:
     """找 bin\\llama.cpp 底下最新一版的 llama-server.exe。"""
-    root = paths.bin_dir() / "llama.cpp"
-    found = sorted(root.glob("*/llama-server.exe"), key=lambda p: p.stat().st_mtime, reverse=True)
-    return str(found[0]) if found else ""
+    from omni2.models.catalog import llama_versions
+
+    found = llama_versions()
+    return str(found[0] / "llama-server.exe") if found else ""
 
 
 def load_settings(path: Path | None = None) -> Settings:

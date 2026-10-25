@@ -197,7 +197,81 @@ def cmd_doctor(settings: Settings) -> int:
         line(bool(model and model.exists()), "翻譯模型", str(model) if model else "未設定 translate.model_path")
     print(f"  設定檔：{paths.config_path()}")
     print(f"  工作資料夾：{paths.jobs_dir()}")
+    from omni2.core import hardware
+    from omni2.models.recommend import recommend
+
+    rec = recommend(hardware.detect(paths.data_dir()))
+    print(f"\n推薦：{rec.tier}")
+    for text in rec.describe() + [f"⚠ {w}" for w in rec.warnings]:
+        print(f"  {text}")
+    changes = rec.changes(settings)
+    print("  目前的設定就是推薦的組合" if not changes else f"  執行 omni2 models recommend --apply 可以套用（{len(changes)} 項設定不同）")
     return 0 if ok else 1
+
+
+def cmd_models(args, settings: Settings) -> int:
+    from omni2.config.settings import save_settings
+    from omni2.core import hardware
+    from omni2.core.storage import human
+    from omni2.models import catalog, download
+    from omni2.models.recommend import models_in_use, recommend
+
+    if args.action == "list":
+        in_use = models_in_use(settings)
+        for m in catalog.CATALOG:
+            installed = catalog.is_installed(m)
+            size = human(catalog.installed_size(m)) if installed else f"約 {human(m.size)}"
+            mark = "✓" if installed else "·"
+            version = catalog.installed_version(m)
+            print(f"{mark} {m.id:<16} {m.label + (f'（{version}）' if version else ''):<28} {size:>10}"
+                  f"{'  使用中' if m.id in in_use else ''}")
+        return 0
+
+    hw = hardware.detect(paths.data_dir())
+    if args.action == "recommend":
+        rec = recommend(hw)
+        print(rec.tier)
+        for text in rec.describe() + [f"⚠ {w}" for w in rec.warnings]:
+            print(f"  {text}")
+        for label, old, new in rec.changes(settings):
+            print(f"  {label}：{old} → {new}")
+        if args.apply:
+            rec.apply(settings)
+            save_settings(settings)
+            print("已套用。")
+        ids = [i for i in rec.models() if not catalog.is_installed(catalog.get(i))]
+        if ids:
+            print(f"還沒下載：{' '.join(ids)}（omni2 models download {' '.join(ids)}）")
+        return 0
+
+    for model_id in args.ids:  # download
+        if model_id not in catalog.BY_ID:
+            print(f"沒有這個模型：{model_id}（omni2 models list 可以看所有模型）")
+            return 2
+    for model_id in args.ids:
+        m = catalog.get(model_id)
+        print(f"下載 {m.label}…", flush=True)
+
+        def progress(done: int, total: int, text: str) -> None:
+            line = f"  {human(done)} / {human(total)}" if total else f"  {text}"
+            sys.stdout.write("\r" + line.ljust(40))
+            sys.stdout.flush()
+
+        result = download.download(model_id, progress, driver_cuda=hw.driver_cuda)
+        print(f"\n  完成：{result.get('path', '')}")
+        if model_id == "llama-server":
+            settings.translate.server_exe = result["path"]
+            save_settings(settings)
+    return 0
+
+
+def cmd_shortcut(args) -> int:
+    from omni2.core import shortcut
+
+    folders = {"desktop": shortcut.desktop_dir(), "start": shortcut.start_menu_dir()}
+    for where in args.where:
+        print(f"已建立：{shortcut.create(folders[where])}")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -226,7 +300,13 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--no-review", action="store_true", help="不確認，直接採用抽出來的術語")
     f.add_argument("--jobs-dir", help=argparse.SUPPRESS)
 
-    sub.add_parser("doctor", help="檢查環境")
+    sub.add_parser("doctor", help="檢查環境、推薦模型組合")
+    m = sub.add_parser("models", help="模型：列出、推薦、下載")
+    m.add_argument("action", choices=["list", "recommend", "download"])
+    m.add_argument("ids", nargs="*", help="download 要下載的模型 id（見 list）")
+    m.add_argument("--apply", action="store_true", help="recommend：套用推薦設定")
+    s = sub.add_parser("shortcut", help="建立啟動捷徑")
+    s.add_argument("where", nargs="+", choices=["desktop", "start"], help="desktop＝桌面，start＝開始功能表")
     c = sub.add_parser("config", help="設定檔")
     c.add_argument("action", choices=["path", "show"])
     return parser
@@ -242,6 +322,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_file(args, settings)
     if args.cmd == "doctor":
         return cmd_doctor(settings)
+    if args.cmd == "models":
+        return cmd_models(args, settings)
+    if args.cmd == "shortcut":
+        return cmd_shortcut(args)
     if args.action == "path":
         print(paths.config_path())
     else:

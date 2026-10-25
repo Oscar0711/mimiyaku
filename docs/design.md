@@ -323,4 +323,72 @@ VRAM 預算：turbo 約 2GB，7B Q6 約 6.5GB，加上 KV cache 約 2GB，16GB �
     - 版面配置要設成 `SetNoConstraint`，否則 Qt 會強制視窗至少容納所有內容，字幕一多視窗就縮不回去。
   - 全域快捷鍵（`ui/hotkeys.py`，RegisterHotKey）：Ctrl+Alt+S 顯示／隱藏、Ctrl+Alt+C 切換滑鼠穿透。
   - 即時分頁（`ui/live_page.py`）。即時和檔案模式互相停用「開始」，避免顯示記憶體不夠。
-- **還沒驗證**：用真的麥克風、真的系統聲音，以及在 GUI 裡指定一個實際播放中的程式，走完整條即時管線。各元件都分別測過，`FileSource` 也跑過完整管線。
+- **實機測試**：使用者用真的音源在 GUI 裡跑過完整的即時管線（2026-10-25），沒有大問題。
+
+### M5：收尾（2026-10-25）
+- **硬體偵測**（`core/hardware.py`）：只用 nvidia-smi 和 Windows API，不 import torch，開啟介面時不會卡。
+  - 顯示卡型號、顯示記憶體、compute capability。
+  - 驅動支援的 CUDA 版本：從 nvidia-smi 表頭讀。新版驅動寫成「CUDA UMD Version」。
+  - CPU 名稱（登錄檔）、記憶體、資料資料夾所在磁碟的剩餘空間。
+- **推薦**（`models/recommend.py`）：
+  - 檔案翻譯每個階段輪流用顯示卡，所以挑單一模型放得下的最好版本。即時翻譯的兩個模型要同時放得下，必要時翻譯改用較小的模型。為此設定多了 `live.translate_model_path`，空字串＝和檔案翻譯相同。
+
+    | 顯示記憶體 | 檔案翻譯 | 即時翻譯 |
+    |---|---|---|
+    | 12 GB 以上 | Qwen3-ASR 1.7B＋Hy-MT2 7B Q6_K | Qwen3-ASR 0.6B＋7B Q6_K（約 9 GB） |
+    | 10 GB | 同上 | 0.6B＋7B Q4_K_M |
+    | 8 GB | 1.7B＋7B Q4_K_M | 0.6B＋1.8B Q8_0 |
+    | 6 GB | 0.6B＋1.8B Q8_0 | 0.6B＋1.8B Q8_0 |
+    | 4 GB | Whisper turbo（int8）＋1.8B Q4_K_M | Whisper small＋1.8B Q4_K_M |
+    | 沒有 NVIDIA | Whisper small（CPU int8）＋1.8B Q4_K_M（CPU） | 同左，建議改用 Fun-ASR |
+
+  - 驅動只支援到 CUDA 12，或顯示卡比 Turing 舊時，PyTorch（cu130）不能用，所以 Qwen3-ASR、講者分離、人聲分離都不能用。這時改推 faster-whisper（CTranslate2 用 CUDA 12），llama.cpp 改下載 CUDA 12.4 版，並提醒更新驅動。
+  - 使用者選了雲端辨識引擎時，套用推薦不會改掉。
+  - 顯示記憶體：0.6B、7B Q6_K、1.8B Q4_K_M 是實測值，其餘依檔案大小估計。
+  - Hy-MT2 1.8B Q4_K_M 用同一份評測句子實測（generic 風格）：
+
+    | 模型 | chrF 日 | 英 | 韓 | 平均 | 秒／100 句 | VRAM |
+    |---|---|---|---|---|---|---|
+    | Hy-MT2-7B Q6_K（對照） | 42.3 | 52.1 | 50.5 | 48.3 | 37 | 7.1 GB |
+    | Hy-MT2-1.8B Q4_K_M | 31.8 | 45.5 | 44.9 | 40.7 | 9.9 | 1.8 GB |
+
+    1.8B 比 7B 差一截，但比舊的 Hunyuan-MT-7B（36.1）好，當小顯示卡和 CPU 的選項可以接受。Q8_0 沒有測。
+- **模型目錄與下載**（`models/catalog.py`、`models/download.py`）：
+  - 四種來源：HF repo（放在 HF 快取）、HF 單一檔案（GGUF，放在 models）、audio-separator 模型（GitHub）、llama.cpp（GitHub 發行版）。
+  - 判斷是否下載完成：
+    - HF 快取：沒有 `*.incomplete`；分片的權重要每一份都在。
+    - 單一檔案：先下載到 `.part`，完成才改名。
+  - 下載在子行程裡跑（`run_stage`），取消就直接結束子行程。
+    - `.part` 用 Range 接著下載；HF 的 `*.incomplete` 由 huggingface_hub 自己續傳。
+    - 實測：GGUF 取消兩次後，都從斷點接著下載。
+  - HF repo 的進度：`snapshot_download` 沒有逐位元組的回呼，改成每 0.5 秒量一次資料夾大小。
+  - **huggingface_hub 的競態**：`snapshot_download` 用多個執行緒同時下載。每個執行緒都會檢查資料夾能不能建符號連結，檢查做完之前，其他執行緒會先當成可以。在沒開開發人員模式的 Windows 上，這會在全新的快取資料夾觸發 WinError 1314。解法是下載前先呼叫一次 `are_symlinks_supported(repo 資料夾)`。
+  - llama.cpp 的發行版現在都標成 prerelease，`releases/latest` 抓不到。改成列出最近 10 版，挑第一個有 Windows 版本的：
+    - 有 NVIDIA 驅動時，挑驅動支援得了的最新 CUDA 版，加上對應的 cudart。
+    - 沒有的話用 CPU 版。
+    - 版本資料夾依 build 號排序（b11853），不看修改時間。
+  - Silero VAD 包在 faster-whisper 裡，pyannote 要同意條款，這兩個不放進下載清單。
+- **介面**：
+  - 設定分頁改成左邊目錄、右邊一次一頁：硬體與模型、辨識與翻譯、雲端語音辨識、講者分離、儲存位置、其他。
+  - 硬體與模型（`ui/models_page.py`）：
+    - 顯示硬體和推薦。「套用推薦設定」會先列出要改的項目和要下載的模型，確認後才套用。
+    - 模型表格：粗體＝目前設定會用到，每列都有下載／刪除按鈕。llama.cpp 可以更新、清除舊版。
+    - 下載排成佇列一次一個，顯示速度和剩餘時間，可以個別取消。
+    - 檔案或即時翻譯在跑的時候，不能刪除模型、不能套用推薦。
+  - 辨識與翻譯：
+    - 檔案翻譯和即時翻譯的模型可以分開選：Qwen3-ASR、Whisper、翻譯模型。翻譯模型清單會標出沒下載的；也可以選其他 GGUF。
+    - 字幕排版：每行字數、行數、閱讀速度。
+  - 其他：建立桌面／開始功能表捷徑、還原預設設定、開啟設定檔資料夾。
+    - 還原預設設定會保留儲存位置、雲端設定、llama.cpp 位置和懸浮字幕位置，再依硬體套用推薦，然後重新開啟程式。
+    - 設定是就地修改的，因為其他分頁拿著的是同一個物件。
+  - 第一次開啟（`first_run_done`）：偵測硬體並跳出精靈（`ui/setup_dialog.py`），勾選要下載的模型。設定已經是推薦組合、模型也都在時，就不跳出。
+  - 開始翻譯前先檢查 llama.cpp 和翻譯模型在不在。沒有的話提示到設定下載，不然 llama-server 會啟動失敗。辨識模型不檢查，因為第一次使用時會自動下載。
+  - 表格換掉的按鈕要等事件迴圈才會刪除，期間會畫在錯的位置，所以換之前先藏起來。這和懸浮字幕的殘影是同一個問題。
+- **捷徑與圖示**（`core/shortcut.py`、`tools/make_icon.py`）：
+  - 捷徑指向 `.venv\Scripts\omni2-gui.exe`（uv 的 gui-scripts，不開主控台），用 WScript.Shell（comtypes）建立。
+  - 圖示是程式產生的多尺寸 ICO，存在 `src/omni2/data/omni2.ico`。offscreen 平台不會自己讀 `.ttc`，要明確載入微軟正黑體。
+  - 設定 AppUserModelID，工作列才會顯示我們的圖示，而不是 Python 的。
+- **CLI**：
+  - `omni2 doctor` 多了推薦組合。
+  - 新增 `omni2 models list|recommend [--apply]|download <id…>` 和 `omni2 shortcut desktop start`。
+

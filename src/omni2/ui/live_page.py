@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from omni2.config.settings import Settings, save_settings
 from omni2.core import paths
 from omni2.export.formats import clock
+from omni2.models.recommend import missing_for
 from omni2.translate.glossary import Glossary
 from omni2.ui.hotkeys import HOTKEYS
 from omni2.ui.overlay import SubtitleOverlay
@@ -341,6 +342,10 @@ class LivePage(QWidget):
         self.settings.translate.target = self.tgt_combo.currentData()
         save_settings(self.settings)
 
+    def sync_from_settings(self) -> None:
+        """設定分頁改了辨識引擎（例如套用推薦）之後，更新這裡的選項。"""
+        self.engine_combo.setCurrentIndex(max(0, self.engine_combo.findData(self.settings.live.stt_engine)))
+
     def start(self) -> None:
         from omni2.live.session import LiveSession
 
@@ -350,6 +355,11 @@ class LivePage(QWidget):
             QMessageBox.warning(self, "即時翻譯", str(e))
             return
         self._save_options()
+        live = self.settings.live
+        missing = missing_for(self.settings, live=True, translate=live.translate)
+        if missing:
+            QMessageBox.warning(self, "缺少模型", "\n".join(missing) + "\n\n請到「設定 → 硬體與模型」下載。")
+            return
         self.labels = {s.label: s.display for s in sources}
         self.table.setRowCount(0)
         self.rows.clear()

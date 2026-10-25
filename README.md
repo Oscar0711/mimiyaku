@@ -8,10 +8,16 @@
 uv sync
 ```
 
-另外需要：
-- ffmpeg（放在 PATH 上）
-- llama.cpp 的 `llama-server`（Windows CUDA 版），路徑寫在設定檔的 `translate.server_exe`
-- 一個翻譯用的 GGUF 模型，路徑寫在 `translate.model_path`。建議用 [Hy-MT2-7B](https://huggingface.co/tencent/Hy-MT2-7B-GGUF) 的 Q6_K（比較結果見設計文件）
+另外需要 ffmpeg（放在 PATH 上）。
+
+模型不用自己找：第一次開啟介面時會偵測顯示卡，推薦一組放得下的模型，勾選後就會下載（包括翻譯用的 llama.cpp）。之後也可以在「設定 → 硬體與模型」下載、刪除、更新。命令列版本：
+
+```bash
+uv run omni2 models recommend --apply   # 依硬體套用推薦設定
+uv run omni2 models list                # 每個模型的下載狀態
+uv run omni2 models download hy-mt2-7b-q6 llama-server
+uv run omni2 shortcut desktop start     # 在桌面和開始功能表建立捷徑
+```
 
 ## 介面
 
@@ -32,6 +38,9 @@ uv run omni2-gui
 - 每次即時翻譯都會留下紀錄，可以匯出成 SRT 或 TXT。
 
 「設定」分頁：
+- 硬體與模型：顯示偵測到的顯示卡和推薦的模型組合；每個模型可以下載、刪除，下載中斷後下次會接著下載。
+- 辨識與翻譯：檔案翻譯和即時翻譯可以用不同的模型（例如顯示記憶體不夠時，即時翻譯改用小一點的翻譯模型）；字幕每行字數、行數、閱讀速度。
+- 其他：建立桌面或開始功能表的捷徑、還原預設設定。
 - 可以把工作檔、模型和 llama.cpp 搬到其他資料夾，也可以選擇把語音辨識模型（Hugging Face 快取）一起搬過去。
 - 可以選擇講者分離的引擎和區分靈敏度。
 - 可以填入雲端語音辨識的金鑰（阿里雲 Fun-ASR、OpenAI、Google）。金鑰存在 Windows 認證管理員，不會寫進設定檔；按「測試」可以確認金鑰是否有效。
