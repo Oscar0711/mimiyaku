@@ -70,6 +70,7 @@ class FileWorkspace(QWidget):
         self.settings = settings
         self.entries: dict[str, QueueEntry] = {}
         self.thread: RunnerThread | None = None
+        self.blocked = False
         self.setAcceptDrops(True)
 
         # ---- 工具列 ----
@@ -335,10 +336,15 @@ class FileWorkspace(QWidget):
         self.queue.takeTopLevelItem(self.queue.indexOfTopLevelItem(entry.item))
         del self.entries[entry.id]
 
+    def set_blocked(self, blocked: bool) -> None:
+        """即時翻譯在進行時不能開始處理檔案（兩邊同時用顯示卡容易不夠）。"""
+        self.blocked = blocked
+        self._update_buttons()
+
     def _update_buttons(self) -> None:
         running = self.thread is not None
         pending = any(e.state != "done" for e in self.entries.values())
-        self.start_button.setEnabled(not running and pending)
+        self.start_button.setEnabled(not running and pending and not self.blocked)
         self.stop_button.setEnabled(running)
         self.options.setEnabled(not running)
         for w in (self.add_button, self.url_edit, self.remove_button, self.clear_button):

@@ -105,6 +105,34 @@ class TermsSettings(BaseModel):
     builtin: list[str] = Field(default_factory=lambda: ["streaming"])  # 內建術語表
 
 
+class LiveSettings(BaseModel):
+    """即時翻譯。"""
+
+    # 音訊來源：mic | system | app | mic+system
+    source: str = "system"
+    mic_device: str = ""  # 裝置名稱；空字串＝預設
+    output_device: str = ""
+    app_name: str = ""  # 指定程式（例如 chrome.exe）
+    # 辨識：qwen3-asr | faster-whisper | funasr（雲端串流）
+    stt_engine: str = "qwen3-asr"
+    qwen_model: str = "Qwen/Qwen3-ASR-0.6B"  # 即時模式要和翻譯模型共用顯示記憶體，預設用小模型
+    whisper_model: str = "large-v3-turbo"
+    funasr_model: str = "fun-asr-realtime"
+    vad_preset: str = "conversation"  # live 會在逗號的停頓就切開，句子太碎
+    partial_ms: int = 600  # 講話期間多久更新一次原文草稿
+    max_utterance_ms: int = 8000
+    src_lang: str | None = None
+    translate: bool = True
+    context_lines: int = 3
+    # 懸浮字幕
+    font_size: int = 26
+    opacity: float = 0.8
+    click_through: bool = False
+    fade_after_s: float = 8.0
+    show_source: bool = True
+    overlay_geometry: list[int] = Field(default_factory=list)  # x, y, w, h
+
+
 class FileModeSettings(BaseModel):
     """檔案工作區上次使用的選項，下次開啟時沿用。"""
 
@@ -132,6 +160,7 @@ class Settings(BaseModel):
     diarization: DiarizationSettings = Field(default_factory=DiarizationSettings)
     terms: TermsSettings = Field(default_factory=TermsSettings)
     file_mode: FileModeSettings = Field(default_factory=FileModeSettings)
+    live: LiveSettings = Field(default_factory=LiveSettings)
     storage: StorageSettings = Field(default_factory=StorageSettings)
 
 

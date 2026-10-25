@@ -16,10 +16,10 @@ ENGINES = {
 }
 
 
-def create_engine(settings: SttSettings) -> SttEngine:
+def create_engine(settings: SttSettings, live: bool = False) -> SttEngine:
     try:
         target = ENGINES[settings.engine]
     except KeyError:
         raise ValueError(f"未知的 STT 引擎：{settings.engine}（可用：{', '.join(ENGINES)}）") from None
     module, cls = target.split(":")
-    return getattr(importlib.import_module(module), cls)(settings)
+    return getattr(importlib.import_module(module), cls)(settings, live=live)

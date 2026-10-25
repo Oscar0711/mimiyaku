@@ -38,17 +38,25 @@ class Qwen3AsrEngine(SttEngine):
         from qwen_asr import Qwen3ASRModel
 
         s = self.settings
-        log.info("載入 Qwen3-ASR %s＋%s", s.qwen_model, s.qwen_aligner)
+        # 即時模式不需要詞級時間戳，不載入對齊器（省約 1.2 GB 顯示記憶體）
+        aligner = None if self.live else s.qwen_aligner
+        log.info("載入 Qwen3-ASR %s%s", s.qwen_model, f"＋{aligner}" if aligner else "")
         device = "cuda:0" if s.device == "cuda" else s.device
         dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
         self._model = Qwen3ASRModel.from_pretrained(
             s.qwen_model,
-            forced_aligner=s.qwen_aligner,
-            forced_aligner_kwargs={"dtype": dtype, "device_map": device},
+            forced_aligner=aligner,
+            forced_aligner_kwargs={"dtype": dtype, "device_map": device} if aligner else None,
             max_inference_batch_size=_CHUNK,
             dtype=dtype,
             device_map=device,
         )
+
+    def transcribe_text(self, audio: np.ndarray, language: str | None = None) -> tuple[str, str | None]:
+        name = _NAMES.get((language or "").split("-")[0]) if language else None
+        result = self._model.transcribe(audio=[(audio, SAMPLE_RATE)], language=name, return_time_stamps=False)[0]
+        detected = (result.language or "").split(",")[0].strip()
+        return (result.text or "").strip(), language or _CODES.get(detected)
 
     def transcribe(self, audio: np.ndarray, opts: TranscribeOptions,
                    progress: ProgressFn | None = None) -> Transcript:

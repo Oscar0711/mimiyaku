@@ -28,8 +28,16 @@ class SttEngine(ABC):
     # True：transcribe_many 會把多個檔案放進同一次批次推論，呼叫端應該一次給多個檔案
     batches_files: bool = False
 
-    def __init__(self, settings: SttSettings):
+    def __init__(self, settings: SttSettings, live: bool = False):
         self.settings = settings
+        # 即時模式只要文字、不要詞級時間戳，引擎可以少載一些東西、走比較快的路
+        self.live = live
+
+    def transcribe_text(self, audio: np.ndarray, language: str | None = None) -> tuple[str, str | None]:
+        """即時模式用：一小段音訊（一句話）→（文字, 語言）。預設借用 transcribe。"""
+        tr = self.transcribe(audio, TranscribeOptions(language=language,
+                                                      vad=VadPreset(mode="fixed_window", window_ms=30000)))
+        return " ".join(s.text for s in tr.segments).strip(), tr.language
 
     @abstractmethod
     def load(self) -> None: ...

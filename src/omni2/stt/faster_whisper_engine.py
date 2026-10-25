@@ -34,6 +34,13 @@ class FasterWhisperEngine(SttEngine):
         self._model = WhisperModel(s.model, device=s.device, compute_type=s.compute_type)
         self._pipeline = BatchedInferencePipeline(self._model)
 
+    def transcribe_text(self, audio: np.ndarray, language: str | None = None) -> tuple[str, str | None]:
+        # 即時模式用 greedy：每句都很短，beam search 的準確度好處不大，卻讓延遲多出約 0.3 秒
+        segments, info = self._model.transcribe(
+            audio, language=lang.stt_code(language), beam_size=1 if self.live else self.settings.beam_size,
+            vad_filter=False, condition_on_previous_text=False, without_timestamps=True)
+        return "".join(s.text for s in segments).strip(), info.language
+
     def transcribe(
         self, audio: np.ndarray, opts: TranscribeOptions, progress: ProgressFn | None = None
     ) -> Transcript:
