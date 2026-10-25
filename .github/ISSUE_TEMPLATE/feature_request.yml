@@ -1,0 +1,39 @@
+name: 功能建議
+description: 想要新功能，或覺得哪裡可以改得更好用
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        謝謝你的建議！如果還只是個想法、想先聽聽別人的意見，也可以到 [討論區](https://github.com/Oscar0711/omni-translate/discussions/categories/ideas) 聊聊。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 哪個部分
+      options:
+        - 檔案翻譯
+        - 即時翻譯
+        - 純紀錄（逐字稿）
+        - 辨識、翻譯品質
+        - 介面、操作
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解決什麼問題
+      description: 你在什麼情況下會需要它？現在的做法哪裡不方便？
+      placeholder: 例如：看韓綜時字幕常常太長，一次顯示不完
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 希望怎麼做
+      description: 你想像中的做法。不確定也沒關係，可以留白。
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 其他做法或參考（選填）
+      description: 試過的替代方法，或其他軟體類似的功能。

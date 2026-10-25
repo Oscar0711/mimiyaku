@@ -8,7 +8,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -33,7 +34,7 @@ from PySide6.QtWidgets import (
 
 from omni2 import __version__
 from omni2.config.settings import Settings, save_settings
-from omni2.core import hardware, paths, secrets, shortcut, storage
+from omni2.core import feedback, hardware, paths, secrets, shortcut, storage
 from omni2.models import catalog
 from omni2.models.recommend import reset_settings
 from omni2.post.diarize import DEFAULT_THRESHOLD, PYANNOTE_MODEL
@@ -284,18 +285,48 @@ class SettingsPage(QWidget):
         open_dir = QPushButton("開啟設定檔資料夾")
         open_dir.clicked.connect(lambda: os.startfile(paths.app_dir()))  # noqa: S606
 
+        bug = QPushButton("回報問題…")
+        bug.setToolTip("開啟 GitHub 的回報表單，會自動帶入版本和顯示卡資訊（不含檔案路徑和金鑰）")
+        bug.clicked.connect(lambda: self._open_feedback("bug"))
+        idea = QPushButton("提供建議…")
+        idea.clicked.connect(lambda: self._open_feedback("feature"))
+        talk = QPushButton("討論區")
+        talk.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(feedback.DISCUSSIONS_URL)))
+        feedback_row = QHBoxLayout()
+        for b in (bug, idea, talk):
+            feedback_row.addWidget(b)
+        feedback_row.addStretch()
+        feedback_note = QLabel("會用瀏覽器開啟 GitHub，需要登入 GitHub 帳號才能送出。")
+        feedback_note.setStyleSheet("color: #666;")
+
+        about = QLabel(
+            f"OmniTranslate {__version__}　<a href='{feedback.REPO_URL}'>{feedback.REPO_URL}</a><br>"
+            "以 <a href='https://www.gnu.org/licenses/agpl-3.0.html'>GNU AGPL-3.0</a> 授權發布，"
+            "不提供任何保證。<br>"
+            f"設定檔：{paths.config_path()}")
+        about.setOpenExternalLinks(True)
+        about.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+
         lay = QVBoxLayout(box)
         lay.addWidget(QLabel("<b>啟動捷徑</b>（點兩下就能開啟，不需要終端機）"))
         lay.addLayout(row)
         lay.addWidget(self.shortcut_label)
         lay.addSpacing(12)
+        lay.addWidget(QLabel("<b>意見回報</b>"))
+        lay.addLayout(feedback_row)
+        lay.addWidget(feedback_note)
+        lay.addSpacing(12)
         lay.addWidget(QLabel("<b>設定</b>"))
         for w in (self.reset_button, reset_note, open_dir):
             lay.addWidget(w, 0, Qt.AlignmentFlag.AlignLeft)
         lay.addSpacing(12)
-        lay.addWidget(QLabel(f"OmniTranslate {__version__}　設定檔：{paths.config_path()}"))
+        lay.addWidget(about)
         self._show_shortcuts()
         return box
+
+    def _open_feedback(self, kind: str) -> None:
+        url = feedback.issue_url(kind, self.settings, self.models.hw)
+        QDesktopServices.openUrl(QUrl(url))
 
     def _show_shortcuts(self) -> None:
         places = [name for name, folder in (("桌面", shortcut.desktop_dir()), ("開始功能表", shortcut.start_menu_dir()))
@@ -511,7 +542,7 @@ class SettingsPage(QWidget):
         self.hf_check = QCheckBox("語音辨識模型（Hugging Face 快取）也放在這裡")
         self.hf_check.setChecked(self.settings.storage.hf_in_data_dir)
         self.hf_check.setToolTip("系統預設放在 %USERPROFILE%\\.cache\\huggingface。整個快取都會搬過來，"
-                                 "其他也用這個快取的程式（例如舊版全能翻譯）會找不到這些模型。")
+                                 "其他也用這個快取的程式會找不到這些模型。")
         # 每個項目一列：名稱｜大小｜位置。用表格排，長路徑才不會把版面擠壞。
         self.usage_grid = QGridLayout()
         self.usage_grid.setColumnStretch(2, 1)

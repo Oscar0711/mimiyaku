@@ -1,8 +1,8 @@
 # OmniTranslate v2：重新設計計畫
 
 ## Context
-上一版（`D:\claude\全能翻譯`）功能齊全，但架構很亂，使用體驗也不好。例如 `gui/control_panel.py` 一個檔案就有 76KB。llama-cpp-python 在 RTX 50 系列上要自己找 CUDA 13 的 wheel 才能跑。卸載模型時 VRAM 也不一定會釋放乾淨。
-這次在 `D:\claude\translator` 從零重寫，保留三個核心：即時翻譯、音檔／影片翻譯、可選的 STT 引擎（本地＋雲端）。翻譯只用本地模型。
+上一版（舊的「全能翻譯」）功能齊全，但架構很亂，使用體驗也不好。例如 `gui/control_panel.py` 一個檔案就有 76KB。llama-cpp-python 在 RTX 50 系列上要自己找 CUDA 13 的 wheel 才能跑。卸載模型時 VRAM 也不一定會釋放乾淨。
+這次從零重寫，保留三個核心：即時翻譯、音檔／影片翻譯、可選的 STT 引擎（本地＋雲端）。翻譯只用本地模型。
 
 **已確認的決定**
 - 介面：PySide6

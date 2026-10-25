@@ -1,0 +1,57 @@
+name: 回報問題
+description: 程式出錯、當掉、辨識或翻譯結果明顯不對
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        謝謝你花時間回報！從程式的「設定 → 其他 → 回報問題」開啟這個表單，下面的「環境」會自動填好。
+        **請不要貼上 API 金鑰**；如果是安全性問題，請看 [SECURITY.md](https://github.com/Oscar0711/omni-translate/blob/main/SECURITY.md)，不要公開回報。
+  - type: dropdown
+    id: area
+    attributes:
+      label: 哪個部分
+      options:
+        - 檔案翻譯
+        - 即時翻譯
+        - 純紀錄（逐字稿）
+        - 設定、模型下載
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 發生了什麼事
+      description: 看到什麼錯誤訊息？畫面有截圖更好。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 怎麼重現
+      description: 一步一步寫下做了什麼。如果跟特定的影片或音檔有關，請說明它的語言、長度、內容類型（例如日文直播、英文 Podcast）。
+      placeholder: |
+        1. 在檔案翻譯加入一段 10 分鐘的日文影片
+        2. 勾選「講者分離」
+        3. 按開始，在「講者分離」階段出錯
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 預期應該怎樣
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: 從程式裡開啟會自動填入。手動填的話，請寫版本、Windows 版本、顯示卡和顯示記憶體、使用的辨識引擎和翻譯模型。
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 記錄檔（選填）
+      description: 記錄檔在 `%LOCALAPPDATA%\OmniTranslate2\logs`。貼上前請確認裡面沒有不想公開的內容。
+      render: text

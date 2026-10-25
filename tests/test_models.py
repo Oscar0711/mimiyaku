@@ -313,3 +313,19 @@ def test_settings_page_sections_and_translate_choice(app, env, monkeypatch):
     assert s.layout.max_line_width == 32
     page.set_busy(True)
     assert not page.reset_button.isEnabled() and page.models.busy
+
+
+def test_feedback_issue_url_has_environment_but_no_paths():
+    from urllib.parse import parse_qs, urlparse
+
+    from omni2.core import feedback
+
+    s = Settings()
+    s.translate.model_path = "C:/Users/someone/secret/HY-MT2-7B-Q6_K.gguf"
+    url = feedback.issue_url("bug", s, gpu_hw(16))
+    query = parse_qs(urlparse(url).query)
+    assert url.startswith(feedback.REPO_URL + "/issues/new?")
+    assert query["template"] == ["bug_report.yml"]
+    env = query["environment"][0]
+    assert "Test GPU（16 GB）" in env and "HY-MT2-7B-Q6_K.gguf" in env and "someone" not in env
+    assert "environment" not in feedback.issue_url("feature", s, None)

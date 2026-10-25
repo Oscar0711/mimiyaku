@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使用問題、想法、心得
+    url: https://github.com/Oscar0711/omni-translate/discussions
+    about: 不確定是不是錯誤、想問怎麼用、或只是想分享，請到討論區。
+  - name: 安全性問題
+    url: https://github.com/Oscar0711/omni-translate/security/advisories/new
+    about: 請私下回報，不要公開在 Issues。

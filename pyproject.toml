@@ -3,6 +3,9 @@ name = "omni2"
 version = "0.1.0"
 description = "OmniTranslate v2：本地語音辨識與字幕翻譯"
 readme = "README.md"
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Oscar0711" }]
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "numpy>=1.26",
@@ -47,6 +50,11 @@ torchaudio = [{ index = "pytorch-cu130" }]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/cu130"
 explicit = true
+
+[project.urls]
+Homepage = "https://github.com/Oscar0711/omni-translate"
+Issues = "https://github.com/Oscar0711/omni-translate/issues"
+Discussions = "https://github.com/Oscar0711/omni-translate/discussions"
 
 [project.scripts]
 omni2 = "omni2.cli:main"
