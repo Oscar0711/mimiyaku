@@ -49,6 +49,25 @@
 
 ## 安裝
 
+### 一鍵安裝（建議）
+
+1. 到 [Releases](https://github.com/Oscar0711/omni-translate/releases/latest) 下載 `install.bat`。
+2. 點兩下執行。
+   - Windows 可能會跳出「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」。
+   - 這個檔案是純文字，可以先用記事本打開檢查內容。
+3. 照畫面指示選擇安裝位置（直接按 Enter 用預設位置）。
+
+它會自動完成這些事：
+- 安裝 uv、Git、ffmpeg（已經有的會跳過；第一次使用 winget 時可能要你按 Y 同意）
+- 下載程式、安裝套件（第一次要下載 PyTorch 等數 GB 的套件，需要一點時間）
+- 在桌面和開始功能表建立捷徑，然後開啟程式
+
+第一次開啟時，程式會偵測顯示卡，列出推薦的模型組合，勾選後就會開始下載。
+
+**更新到最新版**：再執行一次 `install.bat` 就好，只會下載有改動的部分。
+
+### 手動安裝
+
 1. 安裝 [uv](https://docs.astral.sh/uv/getting-started/installation/)（Python 套件管理工具）、Git 和 ffmpeg：
 
    ```bash
@@ -59,7 +78,7 @@
 
    裝完後關掉終端機再重開。
 
-2. 下載程式並安裝套件。第一次會下載 PyTorch 等套件（數 GB），需要一點時間：
+2. 下載程式並安裝套件：
 
    ```bash
    git clone https://github.com/Oscar0711/omni-translate.git
@@ -73,9 +92,7 @@
    uv run omni2-gui
    ```
 
-   第一次開啟會偵測硬體，列出推薦的模型組合，勾選後就會開始下載。
-
-4. 之後不想每次都開終端機的話，可以到「設定 → 其他」建立桌面捷徑。
+4. 不想每次都開終端機的話，可以到「設定 → 其他」建立桌面捷徑。
 
 更新到最新版：在 `omni-translate` 資料夾執行 `git pull`，再執行 `uv sync`。
 
