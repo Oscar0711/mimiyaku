@@ -22,9 +22,11 @@ import numpy as np
 
 from omni2.audio.sources import AudioApp, Device, FileSource, LoopbackSource, MicSource, ProcessSource
 from omni2.config.settings import Settings
+from omni2.live.recognizers import realtime_engine_for
 from omni2.live.record import SessionLog
 from omni2.live.stt_process import LiveSttProcess
 from omni2.live.translator import LiveTranslator
+from omni2.stt.language_models import korean_model
 from omni2.translate.client import ChatClient
 from omni2.translate.glossary import Glossary
 from omni2.translate.server import LlamaServer
@@ -165,9 +167,18 @@ class LiveSession:
 
     def _stt_config(self) -> dict:
         live, stt = self.settings.live, self.settings.stt
-        engine_settings = stt.model_copy(update={"engine": live.stt_engine, "qwen_model": live.qwen_model,
+        engine = realtime_engine_for(live.stt_engine, live.src_lang)
+        if engine != live.stt_engine:
+            self.on_event({"type": "status",
+                           "message": "Fun-ASR 即時版不支援這個來源語言，改用阿里雲 Qwen3-ASR 即時版辨識…"})
+        qwen_model = live.qwen_model
+        korean = korean_model(live.src_lang, live.qwen_model_ko) if engine == "qwen3-asr" else None
+        if korean:
+            qwen_model = korean
+            self.on_event({"type": "status", "message": "來源語言是韓文，改用韓文微調版 Qwen3-ASR 1.7B…"})
+        engine_settings = stt.model_copy(update={"engine": live.stt_engine, "qwen_model": qwen_model,
                                                  "model": live.whisper_model})
-        return {"engine": live.stt_engine, "stt": engine_settings.model_dump(),
+        return {"engine": engine, "stt": engine_settings.model_dump(),
                 "sources": [s.label for s in self.sources], "language": live.src_lang,
                 "vad_preset": live.vad_preset, "partial_ms": live.partial_ms, "max_ms": live.max_utterance_ms,
                 "funasr_model": live.funasr_model, "region": stt.cloud.dashscope_region}

@@ -31,18 +31,25 @@ from PySide6.QtWidgets import (
 )
 
 from omni2.config.settings import Settings, save_settings
-from omni2.core import paths
+from omni2.core import lang, paths
 from omni2.export.formats import clock
+from omni2.live.recognizers import FUNASR_REALTIME_LANGS
 from omni2.models.recommend import missing_for
 from omni2.translate.glossary import Glossary
 from omni2.ui.hotkeys import HOTKEYS
+from omni2.ui.model_hint import local_stt_hint, model_label
 from omni2.ui.overlay import SubtitleOverlay
 from omni2.ui.workspace import SOURCE_LANGS, TARGET_LANGS
 
 MODES = [("系統聲音（喇叭播放的所有聲音）", "system"), ("指定程式", "app"), ("麥克風", "mic"),
          ("麥克風＋系統聲音（線上會議）", "mic+system")]
-ENGINES = [("Qwen3-ASR 0.6B（本地，建議）", "qwen3-asr"), ("Whisper turbo（本地）", "faster-whisper"),
-           ("阿里雲 Fun-ASR 即時（雲端，需金鑰）", "funasr")]
+# 本地 Qwen3-ASR 用哪個大小、韓文會不會換成微調版，顯示在選單下方的提示裡（_update_hint）
+ENGINES = [("Qwen3-ASR（本地，建議）", "qwen3-asr"), ("Whisper turbo（本地）", "faster-whisper"),
+           ("阿里雲 Fun-ASR 即時（雲端，中英日）", "funasr"),
+           ("阿里雲 Qwen3-ASR 即時（雲端，支援韓文等多語言）", "qwen-realtime")]
+
+
+
 PRESETS = [("一般對話（建議）", "conversation"), ("快節奏直播（切得比較碎、延遲較低）", "live"),
            ("ASMR／輕聲", "asmr")]
 COL_TIME, COL_SRC, COL_TEXT, COL_TRANSLATION = range(4)
@@ -174,9 +181,12 @@ class LivePage(QWidget):
             self.preset_combo.addItem(label, preset)
         self.preset_combo.setCurrentIndex(max(0, self.preset_combo.findData(live.vad_preset)))
         self.src_combo = QComboBox()
-        for label, code in SOURCE_LANGS:
-            self.src_combo.addItem(label, code)
-        self.src_combo.setCurrentIndex(max(0, self.src_combo.findData(live.src_lang)))
+        self.src_hint = QLabel()
+        self.src_hint.setWordWrap(True)
+        self.src_hint.setStyleSheet("color: #666;")
+        self._fill_sources(live.src_lang)
+        self.engine_combo.currentIndexChanged.connect(lambda _i: self._fill_sources(self.src_combo.currentData()))
+        self.src_combo.currentIndexChanged.connect(lambda _i: self._update_hint())
         self.translate_check = QCheckBox("翻譯成")
         self.translate_check.setChecked(live.translate)
         self.tgt_combo = QComboBox()
@@ -189,8 +199,35 @@ class LivePage(QWidget):
         form.addRow("辨識引擎", self.engine_combo)
         form.addRow("情境", self.preset_combo)
         form.addRow("來源語言", self.src_combo)
+        form.addRow("", self.src_hint)
         form.addRow("", row)
         return box
+
+    def _fill_sources(self, current: str | None) -> None:
+        """Fun-ASR 即時版不認得韓文（會聽成日文、中文），選它的時候不提供韓文。"""
+        funasr = self.engine_combo.currentData() == "funasr"
+        self.src_combo.blockSignals(True)
+        self.src_combo.clear()
+        for label, code in SOURCE_LANGS:
+            if not funasr or code is None or lang.base(code) in FUNASR_REALTIME_LANGS:
+                self.src_combo.addItem(label, code)
+        self.src_combo.setCurrentIndex(max(0, self.src_combo.findData(current)))
+        self.src_combo.blockSignals(False)
+        self._update_hint()
+
+    def _update_hint(self) -> None:
+        """說明目前的引擎實際會用哪個模型（本地 Qwen3-ASR 遇到韓文會換成微調版）。"""
+        engine, source = self.engine_combo.currentData(), self.src_combo.currentData()
+        live = self.settings.live
+        if engine == "funasr":
+            text = "Fun-ASR 即時版只支援中文、英文、日文；韓文請改用「阿里雲 Qwen3-ASR 即時」或本地 Qwen3-ASR。"
+        else:
+            # 即時翻譯預設用 0.6B，換成 1.7B 的微調版會多用顯示記憶體
+            extra = (f"比 {model_label(live.qwen_model)} 多用約 2.5 GB 顯示記憶體"
+                     if live.qwen_model == "Qwen/Qwen3-ASR-0.6B" else "")
+            text = local_stt_hint(engine, source, live.qwen_model, live.qwen_model_ko, live.whisper_model, extra)
+        self.src_hint.setText(text)
+        self.src_hint.setVisible(bool(text))
 
     def _overlay_box(self) -> QGroupBox:
         live = self.settings.live
@@ -343,8 +380,9 @@ class LivePage(QWidget):
         save_settings(self.settings)
 
     def sync_from_settings(self) -> None:
-        """設定分頁改了辨識引擎（例如套用推薦）之後，更新這裡的選項。"""
+        """設定分頁改了辨識引擎或模型（例如套用推薦）之後，更新這裡的選項。"""
         self.engine_combo.setCurrentIndex(max(0, self.engine_combo.findData(self.settings.live.stt_engine)))
+        self._update_hint()
 
     def start(self) -> None:
         from omni2.live.session import LiveSession

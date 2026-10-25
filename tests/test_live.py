@@ -193,3 +193,84 @@ def test_live_page_handles_events(app, monkeypatch):
     assert [page.table.item(0, c).text() for c in range(4)] == ["00:00:01", "對方", "こんにちは", "你好"]
     assert page.overlay.entries["sys-0"].translation.text() == "你好"
     assert "0.8" in page.latency.text() and "0.9" in page.latency.text()
+
+
+def test_korean_routes_to_qwen_realtime():
+    from omni2.live.recognizers import realtime_engine_for
+
+    assert realtime_engine_for("funasr", "ko") == "qwen-realtime"  # Fun-ASR 即時版會把韓文聽成日文、中文
+    assert realtime_engine_for("funasr", "ja") == "funasr"
+    assert realtime_engine_for("funasr", None) == "funasr"  # 自動偵測：照使用者的選擇
+    assert realtime_engine_for("qwen3-asr", "ko") == "qwen3-asr"  # 本地引擎不受影響
+
+
+def test_qwen_realtime_events():
+    from omni2.live.recognizers import QwenRealtimeRecognizer
+
+    rec = QwenRealtimeRecognizer.__new__(QwenRealtimeRecognizer)  # 不連線，只測事件轉換
+    rec.label, rec.language = "sys", "ko"
+    rec._events, rec._ids, rec._start, rec._end, rec._fed = [], {}, {}, {}, 16000 * 5
+    import threading
+
+    rec._lock = threading.Lock()
+    rec._on_event({"type": "input_audio_buffer.speech_started", "item_id": "a", "audio_start_ms": 800})
+    rec._on_event({"type": "conversation.item.input_audio_transcription.text", "item_id": "a",
+                   "text": "안녕하세요", "stash": " 여러"})
+    rec._on_event({"type": "input_audio_buffer.speech_stopped", "item_id": "a", "audio_end_ms": 3100})
+    rec._on_event({"type": "conversation.item.input_audio_transcription.completed", "item_id": "a",
+                   "transcript": "안녕하세요 여러분."})
+    rec._on_event({"type": "conversation.item.input_audio_transcription.completed", "item_id": "b",
+                   "transcript": "오늘은"})
+    rec._on_event({"type": "error", "error": {"message": "boom"}})
+    events = rec._events
+    assert [e["type"] for e in events] == ["partial", "final", "final", "error"]
+    assert events[0]["text"] == "안녕하세요 여러" and events[0]["id"] == "sys-0"
+    assert (events[1]["start"], events[1]["end"], events[1]["text"]) == (0.8, 3.1, "안녕하세요 여러분.")
+    assert events[2]["id"] == "sys-1" and events[2]["start"] == 5.0  # 沒有起點時用已送出的長度
+    assert "boom" in events[3]["message"]
+
+
+def test_funasr_hides_korean_source(app, monkeypatch):
+    from omni2.config.settings import Settings
+    from omni2.ui import live_page as lp
+    from omni2.ui.overlay import SubtitleOverlay
+
+    monkeypatch.setattr(lp.LivePage, "_refresh_devices", lambda self: None)
+    monkeypatch.setattr(lp, "save_settings", lambda s: None)
+    settings = Settings()
+    settings.live.src_lang = "ko"
+    page = lp.LivePage(settings, SubtitleOverlay(settings.live))
+    codes = lambda: [page.src_combo.itemData(i) for i in range(page.src_combo.count())]  # noqa: E731
+    assert "ko" in codes() and page.src_combo.currentData() == "ko"
+    page.engine_combo.setCurrentIndex(page.engine_combo.findData("funasr"))
+    assert "ko" not in codes() and page.src_combo.currentData() is None and not page.src_hint.isHidden()
+    page.src_combo.setCurrentIndex(page.src_combo.findData("ja"))
+    page.engine_combo.setCurrentIndex(page.engine_combo.findData("qwen-realtime"))
+    assert "ko" in codes() and page.src_combo.currentData() == "ja"  # 換引擎時保留原本的選擇
+
+
+def test_live_hint_explains_korean_model(app, monkeypatch):
+    from omni2.config.settings import Settings
+    from omni2.models import catalog
+    from omni2.ui import live_page as lp
+    from omni2.ui.overlay import SubtitleOverlay
+
+    monkeypatch.setattr(lp.LivePage, "_refresh_devices", lambda self: None)
+    monkeypatch.setattr(lp, "save_settings", lambda s: None)
+    installed = {"yes": True}
+    monkeypatch.setattr(catalog, "repo_installed", lambda repo: installed["yes"])
+    settings = Settings()
+    settings.live.src_lang = "ko"
+    page = lp.LivePage(settings, SubtitleOverlay(settings.live))
+    hint = page.src_hint.text
+    assert "韓文會改用「Qwen3-ASR 1.7B 韓文微調版」" in hint() and not page.src_hint.isHidden()
+    page.src_combo.setCurrentIndex(page.src_combo.findData("ja"))
+    assert hint().startswith("使用 Qwen3-ASR 0.6B") and "選韓文時會改用韓文微調版" in hint()
+    installed["yes"] = False
+    page.src_combo.setCurrentIndex(page.src_combo.findData("ko"))
+    assert "下載「Qwen3-ASR 1.7B 韓文微調版」後" in hint()
+    settings.live.qwen_model_ko = ""
+    page.sync_from_settings()  # 設定頁關掉之後
+    assert "已在「設定 → 辨識與翻譯」關掉" in hint()
+    page.engine_combo.setCurrentIndex(page.engine_combo.findData("qwen-realtime"))
+    assert page.src_hint.isHidden()

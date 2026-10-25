@@ -17,13 +17,14 @@ from pathlib import Path
 from typing import Callable
 
 from omni2.audio.decode import decode_to_wav
-from omni2.config.settings import Settings
+from omni2.config.settings import Settings, SttSettings
 from omni2.core import paths
 from omni2.core.jsonio import write_text_atomic
 from omni2.core.types import Transcript
 from omni2.export import formats as fmt
 from omni2.jobs.job import Job, JobSpec, fingerprint, is_url
 from omni2.post.layout import build_cues
+from omni2.stt.language_models import stt_for_language
 from omni2.translate.client import ChatClient
 from omni2.translate.glossary import Glossary
 from omni2.translate.prompts import PROMPT_VERSION, style_name_for
@@ -128,8 +129,13 @@ class FileRunner:
             return "none"
         return fingerprint("separate", 1, self._fp_prepare(job), self.settings.separation.model)
 
+    def _stt_settings(self, job: Job) -> SttSettings:
+        """這個檔案實際用的辨識設定（韓文會換成韓文微調版，見 omni2.stt.language_models）。"""
+        s = self.settings.stt
+        return stt_for_language(s, job.spec.src_lang or s.language)
+
     def _fp_stt(self, job: Job) -> str:
-        s, lay = self.settings.stt, self.settings.layout
+        s, lay = self._stt_settings(job), self.settings.layout
         return fingerprint(
             "stt", 3, self._fp_separate(job), s.engine, s.active_model(), s.compute_type, s.batch_size > 1,
             job.spec.src_lang or s.language, s.vad_preset, s.beam_size, s.filter_hallucinations,
@@ -249,7 +255,15 @@ class FileRunner:
                 todo.append((job, fp))
         if not todo:
             return
-        s, lay = self.settings.stt, self.settings.layout
+        # 用不同模型的檔案（例如韓文用韓文微調版）分開跑，各自載入一次模型
+        by_model: dict[str, list[tuple[Job, str]]] = {}
+        for job, fp in todo:
+            by_model.setdefault(self._stt_settings(job).active_model(), []).append((job, fp))
+        for group in by_model.values():
+            self._stt_group(group)
+
+    def _stt_group(self, todo: list[tuple[Job, str]]) -> None:
+        s, lay = self._stt_settings(todo[0][0]), self.settings.layout
         payload = {
             "stt": s.model_dump(),
             "items": [

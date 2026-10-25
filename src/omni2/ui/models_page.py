@@ -274,6 +274,7 @@ class ModelsPanel(QWidget):
         catalog.delete(m)
         self.state.pop(m.id, None)
         self.refresh()
+        self.settings_changed.emit()
 
     def _delete_old_llama(self) -> None:
         freed = catalog.delete_old_llama()
@@ -373,12 +374,10 @@ class ModelsPanel(QWidget):
         self.state.pop(model_id, None)
         self._speed = None
         if model_id == "llama-server" and result.get("path"):
-            old = self.settings.translate.server_exe
             self.settings.translate.server_exe = result["path"]
             save_settings(self.settings)
-            if old != result["path"]:
-                self.settings_changed.emit()
         self.refresh()
+        self.settings_changed.emit()  # 其他頁面的模型清單和提示（例如韓文微調版下載好了）跟著更新
 
     def _on_failed(self, model_id: str, message: str) -> None:
         self._speed = None

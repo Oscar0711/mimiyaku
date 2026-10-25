@@ -22,13 +22,15 @@ _BEHIND_CHUNKS = 5
 
 def _make_recognizers(cfg: dict, emit) -> dict:
     from omni2.config.settings import SttSettings
-    from omni2.live.recognizers import FunAsrRealtimeRecognizer, LocalRecognizer
+    from omni2.live.recognizers import FunAsrRealtimeRecognizer, LocalRecognizer, QwenRealtimeRecognizer
     from omni2.stt.registry import create_engine
     from omni2.vad.presets import get_preset
 
     sources = cfg["sources"]
     if cfg["engine"] == "funasr":
         return {s: FunAsrRealtimeRecognizer(s, cfg["funasr_model"], cfg["region"], cfg["language"]) for s in sources}
+    if cfg["engine"] == "qwen-realtime":
+        return {s: QwenRealtimeRecognizer(s, cfg["region"], cfg["language"]) for s in sources}
 
     stt = SttSettings(**cfg["stt"])
     emit({"type": "status", "message": f"載入語音辨識模型 {stt.active_model()}"})

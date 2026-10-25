@@ -37,6 +37,7 @@ from omni2.jobs.runner import STAGE_LABELS, FileRunner
 from omni2.models.recommend import missing_for
 from omni2.translate.glossary import Glossary
 from omni2.ui.bridge import RunnerThread
+from omni2.ui.model_hint import local_stt_hint
 from omni2.ui.player import PlayerPanel
 from omni2.ui.terms_dialog import TermsDialog
 
@@ -191,6 +192,11 @@ class FileWorkspace(QWidget):
             self.engine_combo.addItem(label, engine)
         self.engine_combo.setCurrentIndex(max(0, self.engine_combo.findData(self.settings.stt.engine)))
         self.engine_combo.setToolTip("雲端引擎需要先在「設定」分頁填入金鑰，會依使用量計費。")
+        self.model_hint = QLabel()
+        self.model_hint.setWordWrap(True)
+        self.model_hint.setStyleSheet("color: #666;")
+        self.engine_combo.currentIndexChanged.connect(lambda _i: self._update_hint())
+        self.src_combo.currentIndexChanged.connect(lambda _i: self._update_hint())
 
         grid.addWidget(QLabel("來源語言"), 0, 0)
         grid.addWidget(self.src_combo, 0, 1)
@@ -199,10 +205,11 @@ class FileWorkspace(QWidget):
         grid.addWidget(QLabel("　辨識引擎"), 0, 4)
         grid.addWidget(self.engine_combo, 0, 5)
         grid.setColumnStretch(6, 1)
-        grid.addWidget(QLabel("輸出"), 1, 0)
-        grid.addLayout(formats, 1, 1, 1, 6)
-        grid.addWidget(QLabel("處理"), 2, 0)
-        grid.addLayout(extras, 2, 1, 1, 6)
+        grid.addWidget(self.model_hint, 1, 1, 1, 6)
+        grid.addWidget(QLabel("輸出"), 2, 0)
+        grid.addLayout(formats, 2, 1, 1, 6)
+        grid.addWidget(QLabel("處理"), 3, 0)
+        grid.addLayout(extras, 3, 1, 1, 6)
 
         self.out_combo = QComboBox()
         self.out_combo.addItem("和原檔相同的資料夾", None)
@@ -218,10 +225,19 @@ class FileWorkspace(QWidget):
         out_row.addWidget(self.out_combo)
         out_row.addWidget(self.out_edit, 1)
         out_row.addWidget(self.out_browse)
-        grid.addWidget(QLabel("存到"), 3, 0)
-        grid.addLayout(out_row, 3, 1, 1, 6)
+        grid.addWidget(QLabel("存到"), 4, 0)
+        grid.addLayout(out_row, 4, 1, 1, 6)
         self._sync_enabled()
+        self._update_hint()
         return box
+
+    def _update_hint(self) -> None:
+        """說明本地辨識實際會用哪個模型（Qwen3-ASR 遇到韓文會換成韓文微調版）。"""
+        s = self.settings.stt
+        text = local_stt_hint(self.engine_combo.currentData(), self.src_combo.currentData(), s.qwen_model,
+                              s.qwen_model_ko, s.model)
+        self.model_hint.setText(text)
+        self.model_hint.setVisible(bool(text))
 
     def _on_out_mode(self) -> None:
         if self.out_combo.currentData() == "custom" and not self.out_edit.text():
@@ -265,6 +281,7 @@ class FileWorkspace(QWidget):
     def sync_from_settings(self) -> None:
         """設定分頁改了辨識引擎（例如套用推薦）之後，更新這裡的選項。"""
         self.engine_combo.setCurrentIndex(max(0, self.engine_combo.findData(self.settings.stt.engine)))
+        self._update_hint()
 
     def make_spec(self, input: str) -> JobSpec:
         fm, out = self.settings.file_mode, self.settings.output

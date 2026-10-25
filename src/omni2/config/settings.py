@@ -27,6 +27,8 @@ class SttSettings(BaseModel):
     model: str = "large-v3-turbo"  # faster-whisper 的模型
     qwen_model: str = "Qwen/Qwen3-ASR-1.7B"
     qwen_aligner: str = "Qwen/Qwen3-ForcedAligner-0.6B"
+    # 來源語言是韓文、而且這個模型已經下載時改用它；空字串＝不換（見 omni2.stt.language_models）
+    qwen_model_ko: str = "TeamUNIVA/qwen3_asr_1.7b_ko"
     device: str = "cuda"
     compute_type: str = "float16"
     language: str | None = None  # None＝自動偵測
@@ -113,9 +115,11 @@ class LiveSettings(BaseModel):
     mic_device: str = ""  # 裝置名稱；空字串＝預設
     output_device: str = ""
     app_name: str = ""  # 指定程式（例如 chrome.exe）
-    # 辨識：qwen3-asr | faster-whisper | funasr（雲端串流）
+    # 辨識：qwen3-asr | faster-whisper | funasr、qwen-realtime（阿里雲串流；Fun-ASR 即時版不支援韓文）
     stt_engine: str = "qwen3-asr"
     qwen_model: str = "Qwen/Qwen3-ASR-0.6B"  # 即時模式要和翻譯模型共用顯示記憶體，預設用小模型
+    # 來源語言是韓文時改用的模型（1.7B，比 0.6B 多用約 2.5 GB 顯示記憶體）；空字串＝不換
+    qwen_model_ko: str = "TeamUNIVA/qwen3_asr_1.7b_ko"
     whisper_model: str = "large-v3-turbo"
     funasr_model: str = "fun-asr-realtime"
     vad_preset: str = "conversation"  # live 會在逗號的停頓就切開，句子太碎

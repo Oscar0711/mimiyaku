@@ -13,12 +13,13 @@ from operator import attrgetter
 from omni2.config.settings import Settings
 from omni2.core.hardware import Hardware
 from omni2.models import catalog
+from omni2.stt.language_models import KO_MODEL
 
-CLOUD_ENGINES = {"funasr", "openai", "google"}
+CLOUD_ENGINES = {"funasr", "qwen-realtime", "openai", "google"}
 WHISPER_IDS = {"large-v3-turbo": "whisper-turbo", "small": "whisper-small"}
 QWEN_IDS = {"Qwen/Qwen3-ASR-1.7B": "qwen3-asr-1.7b", "Qwen/Qwen3-ASR-0.6B": "qwen3-asr-0.6b"}
 # 執行時的顯示記憶體（GB），含 KV cache
-VRAM = {"qwen3-asr-0.6b": 2.0, "whisper-turbo": 2.3, "whisper-small": 1.0,
+VRAM = {"qwen3-asr-0.6b": 2.0, "qwen3-asr-1.7b-ko": 4.5, "whisper-turbo": 2.3, "whisper-small": 1.0,
         "hy-mt2-7b-q6": 7.1, "hy-mt2-7b-q4": 5.7, "hy-mt2-1.8b-q8": 2.6, "hy-mt2-1.8b-q4": 1.8}
 
 
@@ -36,6 +37,9 @@ class Recommendation:
     live_qwen: str = "Qwen/Qwen3-ASR-0.6B"
     live_whisper: str = "large-v3-turbo"
     live_translate_model: str = ""  # 空字串＝和檔案翻譯用同一個
+    # 來源語言是韓文時改用的模型（下載了才會用）；空字串＝不換
+    file_qwen_ko: str = ""
+    live_qwen_ko: str = ""
     torch_ok: bool = True  # 能不能跑 PyTorch（CUDA 13）的模型：Qwen3-ASR、講者分離、人聲分離
     warnings: list[str] = field(default_factory=list)
 
@@ -94,6 +98,8 @@ class Recommendation:
         live.whisper_model = self.live_whisper
         live.translate_model_path = (str(catalog.file_path(catalog.get(self.live_translate_model)))
                                      if self.live_translate_model else "")
+        stt.qwen_model_ko = self.file_qwen_ko
+        live.qwen_model_ko = self.live_qwen_ko
 
     def changes(self, settings: Settings) -> list[tuple[str, str, str]]:
         """套用後會改變的設定：（項目, 原本, 改成）。"""
@@ -103,7 +109,8 @@ class Recommendation:
         for path, label in CHANGE_FIELDS:
             old, new = attrgetter(path)(settings), attrgetter(path)(after)
             if old != new:
-                out.append((label, _show(old), _show(new)))
+                empty = "（和檔案翻譯相同）" if path == "live.translate_model_path" else "（不使用）"
+                out.append((label, _show(old, empty), _show(new, empty)))
         return out
 
 
@@ -113,12 +120,13 @@ CHANGE_FIELDS = [
     ("translate.model_path", "翻譯模型"), ("translate.gpu_layers", "翻譯模型放進顯示卡的層數"),
     ("live.stt_engine", "即時翻譯：辨識引擎"), ("live.qwen_model", "即時翻譯：Qwen3-ASR 模型"),
     ("live.whisper_model", "即時翻譯：Whisper 模型"), ("live.translate_model_path", "即時翻譯：翻譯模型"),
+    ("stt.qwen_model_ko", "檔案翻譯：韓文改用的模型"), ("live.qwen_model_ko", "即時翻譯：韓文改用的模型"),
 ]
 
 
-def _show(value) -> str:
+def _show(value, empty: str = "（和檔案翻譯相同）") -> str:
     if value == "":
-        return "（和檔案翻譯相同）"
+        return empty
     text = str(value)
     return text.rsplit("\\", 1)[-1] if text.lower().endswith(".gguf") else text
 
@@ -161,6 +169,12 @@ def recommend(hw: Hardware) -> Recommendation:
     if hw.driver_cuda < 13.0 or 0 < gpu.compute_cap < 7.5:
         r.file_engine = r.live_engine = "faster-whisper"
         r.torch_ok = False
+    # 韓文微調版和 1.7B 一樣大：檔案模式用 1.7B 時就能換；即時模式要和翻譯模型同時放得下
+    if r.file_engine == "qwen3-asr" and r.file_qwen == "Qwen/Qwen3-ASR-1.7B":
+        r.file_qwen_ko = KO_MODEL
+    live_tr = r.live_translate_model or r.translate_model
+    if r.live_engine == "qwen3-asr" and VRAM["qwen3-asr-1.7b-ko"] + VRAM[live_tr] <= vram - 3:
+        r.live_qwen_ko = KO_MODEL
     _ram_warning(hw, r)
     return r
 
@@ -188,6 +202,10 @@ def models_in_use(settings: Settings) -> set[str]:
             if m:
                 ids.append(m.id)
         ids.append("llama-server")
+    for engine, ko in ((s.stt.engine, s.stt.qwen_model_ko), (s.live.stt_engine, s.live.qwen_model_ko)):
+        m = catalog.find_repo(ko) if engine == "qwen3-asr" and ko else None
+        if m and catalog.is_installed(m):  # 只有下載了才會用到
+            ids.append(m.id)
     if s.diarization.engine == "ecapa":
         ids.append("ecapa")
     if s.file_mode.separate_vocals:

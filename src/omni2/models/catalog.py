@@ -46,6 +46,8 @@ CATALOG: list[ModelInfo] = [
               note="檔案翻譯預設，最準、標點完整"),
     ModelInfo("qwen3-asr-0.6b", "Qwen3-ASR 0.6B", "stt", "hf_repo", int(1.75 * GB), "Qwen/Qwen3-ASR-0.6B",
               note="即時翻譯預設，約 2 GB 顯示記憶體"),
+    ModelInfo("qwen3-asr-1.7b-ko", "Qwen3-ASR 1.7B 韓文微調版", "stt", "hf_repo", int(4.39 * GB),
+              "TeamUNIVA/qwen3_asr_1.7b_ko", note="下載後，來源語言是韓文時自動使用（實測錯字少約 12%）"),
     ModelInfo("qwen3-aligner", "Qwen3 ForcedAligner 0.6B", "stt", "hf_repo", int(1.71 * GB),
               "Qwen/Qwen3-ForcedAligner-0.6B", note="Qwen3-ASR 檔案模式的逐詞時間"),
     ModelInfo("whisper-turbo", "Whisper large-v3-turbo", "stt", "hf_repo", int(1.51 * GB),
@@ -166,6 +168,11 @@ def _repo_complete(repo: str) -> bool:
                                                 "embedding_model.ckpt")):
             return True
     return False
+
+
+def repo_installed(repo: str) -> bool:
+    """Hugging Face 快取裡有沒有完整的這個 repo（不在目錄裡的也可以查）。"""
+    return _repo_complete(repo)
 
 
 def is_installed(m: ModelInfo) -> bool:

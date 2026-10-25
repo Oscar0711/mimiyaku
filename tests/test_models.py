@@ -363,3 +363,86 @@ def test_shortcut_replaces_old_name(tmp_path):
     shortcut.create(tmp_path)
     assert sorted(p.name for p in tmp_path.iterdir()) == ["Mimiyaku.lnk"]
     assert shortcut.launch_command()[0].endswith("mimiyaku-gui.exe")
+
+
+# ---- 韓文微調版 ----
+
+@pytest.fixture
+def ko_installed(monkeypatch):
+    monkeypatch.setattr(catalog, "repo_installed", lambda repo: repo == "TeamUNIVA/qwen3_asr_1.7b_ko")
+
+
+def test_korean_model_only_when_korean_and_downloaded(monkeypatch, ko_installed):
+    from omni2.config.settings import SttSettings
+    from omni2.stt.language_models import KO_MODEL, korean_model, stt_for_language
+
+    assert korean_model("ko", KO_MODEL) == KO_MODEL
+    assert korean_model("ja", KO_MODEL) is None and korean_model(None, KO_MODEL) is None  # 自動偵測不換
+    assert korean_model("ko", "") is None  # 使用者關掉了
+    s = SttSettings()
+    assert stt_for_language(s, "ko").qwen_model == KO_MODEL and s.qwen_model == "Qwen/Qwen3-ASR-1.7B"
+    assert stt_for_language(s.model_copy(update={"engine": "funasr"}), "ko").engine == "funasr"
+    monkeypatch.setattr(catalog, "repo_installed", lambda repo: False)
+    assert stt_for_language(s, "ko").qwen_model == "Qwen/Qwen3-ASR-1.7B"  # 沒下載就不換，不會自動下載 4 GB
+
+
+def test_runner_runs_korean_files_with_korean_model(env, ko_installed, monkeypatch):
+    from omni2.jobs.job import JobSpec
+    from omni2.jobs.runner import FileRunner
+
+    files = []
+    for name in ("ko.wav", "ja.wav"):
+        f = env / name
+        f.write_bytes(name.encode())
+        files.append(f)
+    specs = [JobSpec(input=str(files[0]), src_lang="ko"), JobSpec(input=str(files[1]), src_lang="ja")]
+    runner = FileRunner(specs, Settings())
+    ko_job = runner.jobs[0]
+    fp_ko = runner._fp_stt(ko_job)
+    monkeypatch.setattr(catalog, "repo_installed", lambda repo: False)
+    assert runner._fp_stt(ko_job) != fp_ko  # 換了模型＝要重新辨識，不會沿用舊的斷點
+    monkeypatch.setattr(catalog, "repo_installed", lambda repo: repo == "TeamUNIVA/qwen3_asr_1.7b_ko")
+    calls = []
+    monkeypatch.setattr(FileRunner, "_run_worker", lambda self, stage, target, payload, todo, on_done:
+                        calls.append((payload["stt"]["qwen_model"], [j.spec.src_lang for j, _ in todo])))
+    runner._stt(runner.jobs)
+    assert sorted(calls) == [("Qwen/Qwen3-ASR-1.7B", ["ja"]), ("TeamUNIVA/qwen3_asr_1.7b_ko", ["ko"])]
+
+
+def test_live_uses_korean_model(ko_installed):
+    from omni2.live.session import LiveSession, SourceSpec
+
+    s = Settings()
+    s.live.stt_engine, s.live.src_lang = "qwen3-asr", "ko"
+    events = []
+    session = LiveSession(s, [SourceSpec(kind="system", label="sys", display="對方")], None, events.append)
+    cfg = session._stt_config()
+    assert cfg["stt"]["qwen_model"] == "TeamUNIVA/qwen3_asr_1.7b_ko" and any("韓文微調版" in e["message"] for e in events)
+    s.live.qwen_model_ko = ""
+    assert LiveSession(s, session.sources, None, lambda e: None)._stt_config()["stt"]["qwen_model"] \
+        == "Qwen/Qwen3-ASR-0.6B"
+
+
+@pytest.mark.parametrize("gb, file_ko, live_ko", [(16, True, True), (12, True, False), (8, True, False),
+                                                   (6, False, False)])
+def test_recommend_korean_model(gb, file_ko, live_ko):
+    r = recommend.recommend(gpu_hw(gb))
+    assert (bool(r.file_qwen_ko), bool(r.live_qwen_ko)) == (file_ko, live_ko)
+    assert "qwen3-asr-1.7b-ko" not in r.models()  # 選用：要自己下載
+
+
+def test_settings_page_korean_toggles(app, env, monkeypatch):
+    from omni2.ui import models_page as mp
+    from omni2.ui import settings_page as sp
+
+    for mod in (sp, mp):
+        monkeypatch.setattr(mod, "save_settings", lambda s: None)
+    monkeypatch.setattr(sp.SettingsPage, "refresh_usage", lambda self: None)
+    monkeypatch.setattr(mp.ModelsPanel, "detect", lambda self: None)
+    s = Settings()
+    page = sp.SettingsPage(s)
+    assert page.file_ko.isChecked() and page.live_ko.isChecked()
+    page.live_ko.setChecked(False)
+    assert s.live.qwen_model_ko == "" and s.stt.qwen_model_ko == "TeamUNIVA/qwen3_asr_1.7b_ko"
+    page.live_ko.setChecked(True)
+    assert s.live.qwen_model_ko == "TeamUNIVA/qwen3_asr_1.7b_ko"

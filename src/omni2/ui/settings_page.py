@@ -38,6 +38,7 @@ from omni2.core import feedback, hardware, paths, secrets, shortcut, storage
 from omni2.models import catalog
 from omni2.models.recommend import reset_settings
 from omni2.post.diarize import DEFAULT_THRESHOLD, PYANNOTE_MODEL
+from omni2.stt.language_models import KO_MODEL
 from omni2.ui.models_page import ModelsPanel
 from omni2.ui.tasks import Task as _Worker
 from omni2.ui.tasks import run_task
@@ -117,6 +118,8 @@ class SettingsPage(QWidget):
         self.live_whisper = self._choice_combo(WHISPER_MODELS)
         self.translate_model = QComboBox()
         self.live_translate_model = QComboBox()
+        self.file_ko = QCheckBox("來源語言是韓文時改用韓文微調版（要先在「硬體與模型」下載）")
+        self.live_ko = QCheckBox("來源語言是韓文時改用韓文微調版 1.7B（比 0.6B 多用約 2.5 GB 顯示記憶體）")
         self.server_label = QLabel()
         self.server_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.server_label.setWordWrap(True)
@@ -124,10 +127,12 @@ class SettingsPage(QWidget):
         form = QFormLayout(box)
         form.addRow(QLabel("<b>檔案翻譯</b>"))
         form.addRow("Qwen3-ASR 模型", self.file_qwen)
+        form.addRow("", self.file_ko)
         form.addRow("Whisper 模型", self.file_whisper)
         form.addRow("翻譯模型", self.translate_model)
         form.addRow(QLabel("<b>即時翻譯</b>（辨識和翻譯模型同時放在顯示卡上）"))
         form.addRow("Qwen3-ASR 模型", self.live_qwen)
+        form.addRow("", self.live_ko)
         form.addRow("Whisper 模型", self.live_whisper)
         form.addRow("翻譯模型", self.live_translate_model)
         form.addRow(QLabel("<b>翻譯推論程式</b>"))
@@ -140,6 +145,8 @@ class SettingsPage(QWidget):
         self._sync_engines()
         for combo in (self.file_qwen, self.file_whisper, self.live_qwen, self.live_whisper):
             combo.currentIndexChanged.connect(self._save_engines)
+        for check in (self.file_ko, self.live_ko):
+            check.toggled.connect(self._save_engines)
         self.translate_model.activated.connect(lambda _i: self._pick_translate(self.translate_model))
         self.live_translate_model.activated.connect(lambda _i: self._pick_translate(self.live_translate_model))
         return box
@@ -197,6 +204,10 @@ class SettingsPage(QWidget):
         self._select(self.file_whisper, s.stt.model)
         self._select(self.live_qwen, s.live.qwen_model)
         self._select(self.live_whisper, s.live.whisper_model)
+        for check, value in ((self.file_ko, s.stt.qwen_model_ko), (self.live_ko, s.live.qwen_model_ko)):
+            check.blockSignals(True)
+            check.setChecked(bool(value))
+            check.blockSignals(False)
         self._fill_translate(self.translate_model, s.translate.model_path, False)
         self._fill_translate(self.live_translate_model, s.live.translate_model_path, True)
         exe = s.translate.server_exe
@@ -213,10 +224,13 @@ class SettingsPage(QWidget):
         s.stt.model = self.file_whisper.currentData()
         s.live.qwen_model = self.live_qwen.currentData()
         s.live.whisper_model = self.live_whisper.currentData()
+        s.stt.qwen_model_ko = KO_MODEL if self.file_ko.isChecked() else ""
+        s.live.qwen_model_ko = KO_MODEL if self.live_ko.isChecked() else ""
         s.translate.model_path = self.translate_model.currentData() or s.translate.model_path
         s.live.translate_model_path = self.live_translate_model.currentData() or ""
         save_settings(s)
         self.models.refresh()
+        self.settings_changed.emit()  # 即時翻譯分頁的提示跟著更新
 
     def _pick_translate(self, combo: QComboBox) -> None:
         if combo.currentData() == OTHER_FILE:
@@ -723,7 +737,8 @@ class SettingsPage(QWidget):
         """檔案或即時翻譯在處理時，不能搬移、清除、換模型或還原設定。"""
         for w in (self.apply_button, self.clear_button, self.engine_combo, self.sensitivity_combo,
                   self.region_combo, self.openai_model, self.reset_button, self.file_qwen, self.file_whisper,
-                  self.live_qwen, self.live_whisper, self.translate_model, self.live_translate_model):
+                  self.live_qwen, self.live_whisper, self.translate_model, self.live_translate_model,
+                  self.file_ko, self.live_ko):
             w.setEnabled(not busy)
         self.models.set_busy(busy)
         if not busy:

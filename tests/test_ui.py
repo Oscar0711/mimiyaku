@@ -178,3 +178,20 @@ def test_settings_page_saves_key_and_finds_region(app, monkeypatch):
     assert tried == ["intl", "cn"]
     assert settings.stt.cloud.dashscope_region == "cn"
     assert page.key_status["dashscope"].text().startswith("✓")
+
+
+def test_workspace_shows_which_model_is_used(workspace, monkeypatch):
+    from omni2.models import catalog
+
+    monkeypatch.setattr(catalog, "repo_installed", lambda repo: True)
+    ws_ = workspace
+    hint = ws_.model_hint.text
+    ws_.engine_combo.setCurrentIndex(ws_.engine_combo.findData("qwen3-asr"))
+    ws_.src_combo.setCurrentIndex(ws_.src_combo.findData("ko"))
+    assert "韓文會改用「Qwen3-ASR 1.7B 韓文微調版」" in hint() and "顯示記憶體" not in hint()
+    ws_.src_combo.setCurrentIndex(ws_.src_combo.findData(None))
+    assert "自動偵測時不會換成韓文微調版" in hint()
+    ws_.engine_combo.setCurrentIndex(ws_.engine_combo.findData("faster-whisper"))
+    assert hint() == "使用 Whisper large-v3-turbo。"
+    ws_.engine_combo.setCurrentIndex(ws_.engine_combo.findData("funasr"))
+    assert ws_.model_hint.isHidden()
