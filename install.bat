@@ -57,11 +57,16 @@ if ($env:OMNI2_INSTALL_DIR) {
     $answer = Read-Host "    直接按 Enter 安裝到 $DefaultDir，或輸入其他資料夾"
     $Dir = if ($answer.Trim()) { $answer.Trim().Trim('"') } else { $DefaultDir }
 }
-$Updating = Test-Path (Join-Path $Dir ".git")
+try { $Dir = [IO.Path]::GetFullPath($Dir) } catch { Fail "「$Dir」不是有效的資料夾路徑。" }
+if ($Dir -eq [IO.Path]::GetPathRoot($Dir)) { Fail "不能直接裝在磁碟根目錄（$Dir），請指定一個資料夾，例如 $($Dir)Mimiyaku" }
+$Updating = Test-Path -LiteralPath (Join-Path $Dir ".git")
+if (-not $Updating -and (Test-Path -LiteralPath $Dir) -and (Get-ChildItem -LiteralPath $Dir -Force | Select-Object -First 1)) {
+    Fail "$Dir 裡面已經有其他檔案。請指定一個新的或空的資料夾（例如 $(Join-Path $Dir 'Mimiyaku')）。"
+}
 Info $(if ($Updating) { "已經安裝在 $Dir，這次會更新到最新版" } else { "安裝到 $Dir" })
 
 if (-not $Updating) {
-    $drive = (Split-Path -Qualifier ([IO.Path]::GetFullPath($Dir)))
+    $drive = (Split-Path -Qualifier $Dir)
     $free = (Get-PSDrive -Name $drive.TrimEnd(':')).Free / 1GB
     if ($free -lt 15) { Warn ("{0} 只剩 {1:N0} GB；套件約 6 GB，模型另外需要 10～20 GB。" -f $drive, $free) }
 }
@@ -98,8 +103,7 @@ if ($Updating) {
     if ($LASTEXITCODE -ne 0) { Fail "更新失敗。如果你改過程式的檔案，請先還原（git -C `"$Dir`" checkout .）再執行一次。" }
 } else {
     Step "下載程式"
-    $parent = Split-Path -Parent ([IO.Path]::GetFullPath($Dir))
-    New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    # 上層資料夾不存在時 git clone 會自己建；不能對磁碟根目錄（例如 D:\）呼叫 New-Item，會報「路徑格式不正確」
     & git clone $Repo $Dir
     if ($LASTEXITCODE -ne 0) { Fail "下載程式失敗，請確認網路連線。" }
 }
