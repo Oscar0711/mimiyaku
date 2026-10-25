@@ -8,7 +8,7 @@
 
 本專案專為即時翻譯和音檔翻譯而進行設計的，可採用本地stt模型加上本地語言模型進行翻譯，也可選擇使用阿里雲FUN-ASR進行雲端stt再加上本地語言模型進行翻譯。推薦顯存小於8GB的使用者使用雲端stt加上本地語言模型翻譯，使用介面內也有診斷可以推薦你要使用哪一種組合。
 
-推薦搭配VB-audio使用
+推薦搭配VB-audio使用（設定方式見[搭配 VB-Audio 虛擬音效線](#搭配-vb-audio-虛擬音效線)）
 
 > **English:** Mimiyaku (耳訳, "translating by ear") is a Windows desktop app that transcribes and translates speech into subtitles, both from files and live from any app's audio. Speech recognition (Qwen3-ASR / faster-whisper, or optional cloud engines) and translation (Hy-MT2 via llama.cpp) run locally on your GPU. The UI is in Traditional Chinese; Japanese, English and Korean → Traditional Chinese are the tuned language pairs.
 
@@ -118,6 +118,25 @@
 - **講者分離**：內建引擎不需要帳號。也可以改用 pyannote（較準）：先到 [pyannote/speaker-diarization-community-1](https://hf.co/pyannote/speaker-diarization-community-1) 同意使用條款，再執行 `uv run hf auth login` 登入。
 - **儲存位置**：工作檔和模型可以搬到其他磁碟。
 - **其他**：建立捷徑、回報問題、還原預設設定。
+
+## 搭配 VB-Audio 虛擬音效線
+
+[VB-CABLE](https://vb-audio.com/Cable/) 是一條「虛擬音效線」：送進 **CABLE Input**（播放裝置）的聲音，會原封不動地出現在 **CABLE Output**（錄音裝置）。用它把影片、直播或遊戲的聲音單獨導進 Mimiyaku，即時翻譯只會聽到這一路聲音，不會混進通知音、Discord 或其他程式的聲音。
+
+即時翻譯本身的「系統聲音」「指定程式」不用 VB-CABLE 也能收音；下面這些情況比較適合改用 VB-CABLE：
+- 「指定程式」抓不到聲音（有些遊戲或播放器用獨佔模式輸出）。
+- 想精確控制哪些聲音要翻譯，例如只翻譯某個播放器，其他程式的聲音都不要。
+- 一般麥克風、系統聲音的設定一直收到雜音。
+
+**設定步驟**
+1. 到 [VB-CABLE 官網](https://vb-audio.com/Cable/)下載驅動程式壓縮檔，解壓縮後在 `VBCABLE_Setup_x64.exe` 上按右鍵 →「以系統管理員身分執行」→ Install Driver，裝完重新開機。VB-CABLE 是捐款軟體（donationware）：可以免費下載，覺得好用可以到官網贊助。
+2. 把要翻譯的程式的聲音輸出改成「CABLE Input (VB-Audio Virtual Cable)」：
+   - 到 Windows「設定 → 系統 → 音效 → 音量混音程式」，把那個程式的輸出裝置改成 CABLE Input；或在播放器自己的音訊設定裡選。
+   - 不建議把整台電腦的預設喇叭改成 CABLE Input，不然所有聲音都會被送去翻譯。
+3. 在 Mimiyaku 的「即時翻譯」分頁：擷取選「麥克風」，麥克風選「**CABLE Output (VB-Audio Virtual Cable)**」。
+4. 自己也想聽到聲音的話：在 Windows 的「聲音」控制台（設定 → 系統 → 音效 → 其他音效設定）→「錄製」分頁 → 在 CABLE Output 上按右鍵 →「內容」→「接聽」分頁，勾選「接聽此裝置」，播放裝置選你的喇叭或耳機。
+
+播放時，即時翻譯分頁的「音量（麥克風）」那條應該會跳動；沒有動的話，檢查步驟 2 那個程式的輸出是不是真的改到 CABLE Input 了。
 
 ## 命令列
 
