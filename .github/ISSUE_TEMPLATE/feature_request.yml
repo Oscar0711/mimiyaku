@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        謝謝你的建議！如果還只是個想法、想先聽聽別人的意見，也可以到 [討論區](https://github.com/Oscar0711/omni-translate/discussions/categories/ideas) 聊聊。
+        謝謝你的建議！如果還只是個想法、想先聽聽別人的意見，也可以到 [討論區](https://github.com/Oscar0711/mimiyaku/discussions/categories/ideas) 聊聊。
   - type: dropdown
     id: area
     attributes:

@@ -8,7 +8,7 @@
 - 處理影音檔或網址時，可能被利用來執行任意程式
 - 下載模型時，可能被替換成惡意檔案
 
-**請不要開公開的 Issue。** 請到 [Security → Report a vulnerability](https://github.com/Oscar0711/omni-translate/security/advisories/new) 私下回報，只有維護者看得到。
+**請不要開公開的 Issue。** 請到 [Security → Report a vulnerability](https://github.com/Oscar0711/mimiyaku/security/advisories/new) 私下回報，只有維護者看得到。
 
 回報時請盡量附上：問題的說明、重現步驟、可能造成的影響。我會盡快回覆，修好後再公開說明。
 

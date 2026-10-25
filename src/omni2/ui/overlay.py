@@ -55,7 +55,7 @@ class SubtitleOverlay(QWidget):
                          | Qt.WindowType.Tool)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setWindowTitle("OmniTranslate 字幕")
+        self.setWindowTitle("Mimiyaku 字幕")
         self.entries: dict[str, _Entry] = {}
         self.order: list[str] = []
         self._drag: QPoint | None = None

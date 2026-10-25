@@ -300,7 +300,7 @@ class SettingsPage(QWidget):
         feedback_note.setStyleSheet("color: #666;")
 
         about = QLabel(
-            f"OmniTranslate {__version__}　<a href='{feedback.REPO_URL}'>{feedback.REPO_URL}</a><br>"
+            f"Mimiyaku {__version__}　<a href='{feedback.REPO_URL}'>{feedback.REPO_URL}</a><br>"
             "以 <a href='https://www.gnu.org/licenses/agpl-3.0.html'>GNU AGPL-3.0</a> 授權發布，"
             "不提供任何保證。<br>"
             f"設定檔：{paths.config_path()}")
@@ -557,7 +557,7 @@ class SettingsPage(QWidget):
         buttons.addWidget(self.clear_button)
         buttons.addStretch()
 
-        note = QLabel("設定檔和術語表固定放在 %LOCALAPPDATA%\\OmniTranslate2。")
+        note = QLabel(f"設定檔和術語表固定放在 {paths.app_dir()}。")
         note.setStyleSheet("color: #666;")
         lay = QVBoxLayout(box)
         lay.addLayout(row)

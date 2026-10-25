@@ -1,6 +1,6 @@
 """主視窗：檔案翻譯、即時翻譯、設定三個分頁，加上懸浮字幕和全域快捷鍵。第一次開啟時跳出設定精靈。
 
-    uv run omni2-gui
+    uv run mimiyaku-gui
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: Settings):
         super().__init__()
         self.settings = settings
-        self.setWindowTitle(f"OmniTranslate {__version__}")
+        self.setWindowTitle(f"Mimiyaku {__version__}")
         self.resize(1280, 860)
         self.workspace = FileWorkspace(settings)
         self.overlay = SubtitleOverlay(settings.live)
@@ -130,7 +130,7 @@ def main() -> int:
             setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
     shortcut.set_app_id()
     app = QApplication(sys.argv)
-    app.setApplicationName("OmniTranslate")
+    app.setApplicationName("Mimiyaku")
     app.setWindowIcon(QIcon(str(shortcut.icon_path())))
     window = MainWindow(load_settings())
     window.show()

@@ -1,7 +1,7 @@
 [project]
 name = "omni2"
 version = "0.1.0"
-description = "OmniTranslate v2：本地語音辨識與字幕翻譯"
+description = "Mimiyaku：本地語音辨識與字幕翻譯"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -52,14 +52,16 @@ url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [project.urls]
-Homepage = "https://github.com/Oscar0711/omni-translate"
-Issues = "https://github.com/Oscar0711/omni-translate/issues"
-Discussions = "https://github.com/Oscar0711/omni-translate/discussions"
+Homepage = "https://github.com/Oscar0711/mimiyaku"
+Issues = "https://github.com/Oscar0711/mimiyaku/issues"
+Discussions = "https://github.com/Oscar0711/mimiyaku/discussions"
 
 [project.scripts]
-omni2 = "omni2.cli:main"
+mimiyaku = "omni2.cli:main"
+omni2 = "omni2.cli:main"  # 改名前的指令，保留相容
 
 [project.gui-scripts]
+mimiyaku-gui = "omni2.ui.app:main"
 omni2-gui = "omni2.ui.app:main"
 
 [dependency-groups]

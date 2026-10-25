@@ -1,4 +1,4 @@
-"""設定。預設值寫在程式裡，使用者的修改存到 %LOCALAPPDATA%\\OmniTranslate2\\config.yaml。"""
+"""設定。預設值寫在程式裡，使用者的修改存到 %LOCALAPPDATA%\\Mimiyaku\\config.yaml（位置見 omni2.core.paths）。"""
 
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ class DiarizationSettings(BaseModel):
 
 
 class StorageSettings(BaseModel):
-    # 工作檔、模型、llama.cpp 的資料夾；空字串＝%LOCALAPPDATA%\OmniTranslate2
+    # 工作檔、模型、llama.cpp 的資料夾；空字串＝設定檔所在的資料夾（%LOCALAPPDATA%\Mimiyaku）
     data_dir: str = ""
     # 語音辨識模型（Hugging Face 快取）也放在資料夾裡；否則用系統預設的 ~/.cache/huggingface
     hf_in_data_dir: bool = False

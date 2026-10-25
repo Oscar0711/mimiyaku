@@ -14,14 +14,14 @@ from omni2 import __version__
 from omni2.config.settings import Settings
 from omni2.core.hardware import Hardware
 
-REPO_URL = "https://github.com/Oscar0711/omni-translate"
+REPO_URL = "https://github.com/Oscar0711/mimiyaku"
 DISCUSSIONS_URL = f"{REPO_URL}/discussions"
 TEMPLATES = {"bug": "bug_report.yml", "feature": "feature_request.yml"}
 
 
 def environment(settings: Settings, hw: Hardware | None) -> str:
     s = settings
-    lines = [f"OmniTranslate {__version__}", f"Windows：{platform.version()}（{platform.machine()}）"]
+    lines = [f"Mimiyaku {__version__}", f"Windows：{platform.version()}（{platform.machine()}）"]
     if hw is not None:
         gpu = hw.gpu
         lines.append(f"顯示卡：{gpu.name}（{gpu.vram_gb:.0f} GB），驅動 {hw.driver}，CUDA {hw.driver_cuda:g}"

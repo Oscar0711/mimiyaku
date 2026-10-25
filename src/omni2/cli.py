@@ -275,7 +275,7 @@ def cmd_shortcut(args) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="omni2", description="OmniTranslate v2")
+    parser = argparse.ArgumentParser(prog="mimiyaku", description="Mimiyaku")
     parser.add_argument("-v", "--verbose", action="store_true", help="顯示詳細記錄")
     sub = parser.add_subparsers(dest="cmd", required=True)
 

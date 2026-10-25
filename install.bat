@@ -1,4 +1,4 @@
-<# : OmniTranslate installer (batch + PowerShell hybrid; the batch part only starts PowerShell)
+<# : Mimiyaku installer (batch + PowerShell hybrid; the batch part only starts PowerShell)
 @echo off
 setlocal
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$script = Get-Content -LiteralPath '%~f0' -Raw -Encoding UTF8; Invoke-Expression $script"
@@ -7,7 +7,7 @@ if not defined OMNI2_NO_PAUSE pause
 exit /b %code%
 #>
 
-# OmniTranslate 一鍵安裝／更新
+# Mimiyaku 一鍵安裝／更新
 #
 # 第一次執行：安裝需要的工具（uv、Git、ffmpeg）、下載程式、安裝套件、建立桌面和開始功能表捷徑。
 # 已經安裝過：再執行一次就會更新到最新版。
@@ -17,8 +17,8 @@ exit /b %code%
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$Repo = if ($env:OMNI2_REPO) { $env:OMNI2_REPO } else { "https://github.com/Oscar0711/omni-translate.git" }
-$DefaultDir = Join-Path $env:LOCALAPPDATA "Programs\OmniTranslate"
+$Repo = if ($env:OMNI2_REPO) { $env:OMNI2_REPO } else { "https://github.com/Oscar0711/mimiyaku.git" }
+$DefaultDir = Join-Path $env:LOCALAPPDATA "Programs\Mimiyaku"
 
 function Step($text) { Write-Host ""; Write-Host "==> $text" -ForegroundColor Cyan }
 function Info($text) { Write-Host "    $text" }
@@ -44,7 +44,7 @@ function Ensure-Tool($command, $wingetId, $label) {
     if (-not (Has $command)) { Fail "$label 安裝後還是找不到。請關掉這個視窗，再執行一次。" }
 }
 
-Write-Host "OmniTranslate 一鍵安裝" -ForegroundColor Green
+Write-Host "Mimiyaku 一鍵安裝" -ForegroundColor Green
 Write-Host "會安裝 uv、Git、ffmpeg（已經有的會跳過）、下載程式並安裝套件。第一次安裝要下載數 GB，請耐心等候。"
 
 if (-not [Environment]::Is64BitOperatingSystem) { Fail "需要 64 位元的 Windows。" }
@@ -92,8 +92,8 @@ Ensure-Tool "ffmpeg" "Gyan.FFmpeg" "ffmpeg"
 # ---- 程式 ----
 if ($Updating) {
     Step "更新程式"
-    $running = Get-Process -Name "omni2-gui" -ErrorAction SilentlyContinue
-    if ($running) { Fail "OmniTranslate 正在執行，請先關掉它再更新。" }
+    $running = Get-Process -Name "mimiyaku-gui", "omni2-gui" -ErrorAction SilentlyContinue
+    if ($running) { Fail "Mimiyaku 正在執行，請先關掉它再更新。" }
     & git -C $Dir pull --ff-only
     if ($LASTEXITCODE -ne 0) { Fail "更新失敗。如果你改過程式的檔案，請先還原（git -C `"$Dir`" checkout .）再執行一次。" }
 } else {
@@ -125,7 +125,7 @@ if ($Updating) {
 Write-Host "之後要更新，再執行一次這個檔案就好。"
 
 if (-not $env:OMNI2_NO_LAUNCH) {
-    $gui = Join-Path $Dir ".venv\Scripts\omni2-gui.exe"
+    $gui = Join-Path $Dir ".venv\Scripts\mimiyaku-gui.exe"
     if (Test-Path $gui) { Start-Process -FilePath $gui -WorkingDirectory $Dir }
 }
 exit 0

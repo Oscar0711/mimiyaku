@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         謝謝你花時間回報！從程式的「設定 → 其他 → 回報問題」開啟這個表單，下面的「環境」會自動填好。
-        **請不要貼上 API 金鑰**；如果是安全性問題，請看 [SECURITY.md](https://github.com/Oscar0711/omni-translate/blob/main/SECURITY.md)，不要公開回報。
+        **請不要貼上 API 金鑰**；如果是安全性問題，請看 [SECURITY.md](https://github.com/Oscar0711/mimiyaku/blob/main/SECURITY.md)，不要公開回報。
   - type: dropdown
     id: area
     attributes:
@@ -53,5 +53,5 @@ body:
     id: logs
     attributes:
       label: 記錄檔（選填）
-      description: 記錄檔在 `%LOCALAPPDATA%\OmniTranslate2\logs`。貼上前請確認裡面沒有不想公開的內容。
+      description: 記錄檔在 `%LOCALAPPDATA%\Mimiyaku\logs`（舊版是 `%LOCALAPPDATA%\OmniTranslate2\logs`）。貼上前請確認裡面沒有不想公開的內容。
       render: text

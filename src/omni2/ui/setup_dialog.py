@@ -28,7 +28,7 @@ def needs_setup(settings: Settings, rec: Recommendation) -> bool:
 class SetupDialog(QDialog):
     def __init__(self, settings: Settings, hw: Hardware, rec: Recommendation, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("歡迎使用 OmniTranslate")
+        self.setWindowTitle("歡迎使用 Mimiyaku")
         self.setMinimumWidth(620)
         self.hw = hw
 

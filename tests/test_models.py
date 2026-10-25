@@ -243,7 +243,7 @@ def test_create_shortcut(tmp_path):
     from omni2.core import shortcut
 
     path = shortcut.create(tmp_path)
-    assert path.exists() and path.name == "OmniTranslate.lnk"
+    assert path.exists() and path.name == "Mimiyaku.lnk"
     assert shortcut.icon_path().exists()
 
 
@@ -344,3 +344,22 @@ def test_progress_signals_carry_sizes_over_2gb(app):
     task.progress.connect(lambda *args: got.append(args))
     task.progress.emit(big, total, "x")
     assert got == [("hy-mt2-7b-q6", big, total, ""), (big, total, "x")]
+
+
+def test_app_dir_keeps_using_old_folder(tmp_path, monkeypatch):
+    from omni2.core import paths as p
+
+    monkeypatch.setattr(p, "user_data_dir", lambda name, **kw: str(tmp_path / name))
+    assert p.app_dir() == tmp_path / "Mimiyaku"  # 新安裝
+    (tmp_path / "Mimiyaku").rmdir()
+    (tmp_path / "OmniTranslate2").mkdir()
+    assert p.app_dir() == tmp_path / "OmniTranslate2"  # 改名前就裝了：沿用，模型和設定不用搬
+
+
+def test_shortcut_replaces_old_name(tmp_path):
+    from omni2.core import shortcut
+
+    (tmp_path / "OmniTranslate.lnk").write_bytes(b"old")
+    shortcut.create(tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["Mimiyaku.lnk"]
+    assert shortcut.launch_command()[0].endswith("mimiyaku-gui.exe")

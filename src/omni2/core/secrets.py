@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import os
 
-SERVICE = "OmniTranslate2"
+SERVICE = "Mimiyaku"
+LEGACY_SERVICE = "OmniTranslate2"  # 改名前存的金鑰；讀到時搬到新名稱底下
 # 名稱 → 對應的環境變數（沒有存在認證管理員時的備用來源）
 ENV_VARS = {
     "dashscope": "DASHSCOPE_API_KEY",
@@ -26,9 +27,25 @@ def _keyring():
     return keyring
 
 
+def _stored(name: str) -> str | None:
+    """認證管理員裡的金鑰。只有舊名稱底下有的話，搬到新名稱底下。"""
+    kr = _keyring()
+    value = kr.get_password(SERVICE, name)
+    if value:
+        return value
+    value = kr.get_password(LEGACY_SERVICE, name)
+    if value:
+        try:
+            kr.set_password(SERVICE, name, value)
+            kr.delete_password(LEGACY_SERVICE, name)
+        except Exception:  # noqa: BLE001 — 搬不成功也沒關係，下次再讀舊的
+            pass
+    return value
+
+
 def get_secret(name: str) -> str | None:
     try:
-        value = _keyring().get_password(SERVICE, name)
+        value = _stored(name)
     except Exception:  # noqa: BLE001 — 認證管理員無法使用時改讀環境變數
         value = None
     return value or os.environ.get(ENV_VARS.get(name, "")) or None
@@ -48,16 +65,17 @@ def set_secret(name: str, value: str | None) -> None:
     if value:
         kr.set_password(SERVICE, name, value)
         return
-    try:
-        kr.delete_password(SERVICE, name)
-    except Exception:  # noqa: BLE001 — 本來就沒有存
-        pass
+    for service in (SERVICE, LEGACY_SERVICE):
+        try:
+            kr.delete_password(service, name)
+        except Exception:  # noqa: BLE001 — 本來就沒有存
+            pass
 
 
 def secret_source(name: str) -> str | None:
     """金鑰從哪裡來：'keyring'、'env'，或 None（沒有設定）。"""
     try:
-        if _keyring().get_password(SERVICE, name):
+        if _stored(name):
             return "keyring"
     except Exception:  # noqa: BLE001
         pass

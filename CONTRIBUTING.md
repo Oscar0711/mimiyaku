@@ -4,9 +4,9 @@
 
 ## 回報問題、提出建議
 
-- **程式出錯、結果明顯不對**：開一則 [Issue](https://github.com/Oscar0711/omni-translate/issues/new/choose)，選「回報問題」。從程式的「設定 → 其他 → 回報問題」開啟的話，版本和顯示卡資訊會自動填好。
+- **程式出錯、結果明顯不對**：開一則 [Issue](https://github.com/Oscar0711/mimiyaku/issues/new/choose)，選「回報問題」。從程式的「設定 → 其他 → 回報問題」開啟的話，版本和顯示卡資訊會自動填好。
 - **想要新功能**：開一則 Issue，選「功能建議」。
-- **使用問題、還不成熟的想法、心得分享**：到 [討論區](https://github.com/Oscar0711/omni-translate/discussions)。
+- **使用問題、還不成熟的想法、心得分享**：到 [討論區](https://github.com/Oscar0711/mimiyaku/discussions)。
 - **安全性問題**：請看 [SECURITY.md](SECURITY.md)，不要公開回報。
 
 ## 開發環境
@@ -14,11 +14,11 @@
 需要 Windows 10/11、[uv](https://docs.astral.sh/uv/)、ffmpeg。要跑本地模型的話，需要 NVIDIA 顯示卡，驅動程式要支援 CUDA 13。
 
 ```bash
-git clone https://github.com/Oscar0711/omni-translate.git
-cd omni-translate
+git clone https://github.com/Oscar0711/mimiyaku.git
+cd mimiyaku
 uv sync
 uv run pytest            # 單元測試，不需要顯示卡和模型
-uv run omni2-gui         # 開啟介面
+uv run mimiyaku-gui      # 開啟介面
 ```
 
 架構、各階段的設計理由和實測數據都寫在 [docs/design.md](docs/design.md)，改動前建議先看相關段落。

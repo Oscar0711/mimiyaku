@@ -1,4 +1,4 @@
-# OmniTranslate
+# Mimiyaku（耳訳）
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/platform-Windows%2010%2F11-0078d4)
@@ -8,7 +8,7 @@
 
 本專案專為即時翻譯和音檔翻譯而進行設計的，可採用本地stt模型加上本地語言模型進行翻譯，也可選擇使用阿里雲FUN-ASR進行雲端stt再加上本地語言模型進行翻譯。推薦顯存小於8GB的使用者使用雲端stt加上本地語言模型翻譯，使用介面內也有診斷可以推薦你要使用哪一種組合。
 
-> **English:** OmniTranslate is a Windows desktop app that transcribes and translates speech into subtitles, both from files and live from any app's audio. Speech recognition (Qwen3-ASR / faster-whisper, or optional cloud engines) and translation (Hy-MT2 via llama.cpp) run locally on your GPU. The UI is in Traditional Chinese; Japanese, English and Korean → Traditional Chinese are the tuned language pairs.
+> **English:** Mimiyaku (耳訳, "translating by ear") is a Windows desktop app that transcribes and translates speech into subtitles, both from files and live from any app's audio. Speech recognition (Qwen3-ASR / faster-whisper, or optional cloud engines) and translation (Hy-MT2 via llama.cpp) run locally on your GPU. The UI is in Traditional Chinese; Japanese, English and Korean → Traditional Chinese are the tuned language pairs.
 
 ![即時翻譯的懸浮字幕](docs/images/overlay.png)
 
@@ -51,7 +51,7 @@
 
 ### 一鍵安裝（建議）
 
-1. 到 [Releases](https://github.com/Oscar0711/omni-translate/releases/latest) 下載 `install.bat`。
+1. 到 [Releases](https://github.com/Oscar0711/mimiyaku/releases/latest) 下載 `install.bat`。
 2. 點兩下執行。
    - Windows 可能會跳出「Windows 已保護您的電腦」，按「其他資訊」→「仍要執行」。
    - 這個檔案是純文字，可以先用記事本打開檢查內容。
@@ -81,20 +81,20 @@
 2. 下載程式並安裝套件：
 
    ```bash
-   git clone https://github.com/Oscar0711/omni-translate.git
-   cd omni-translate
+   git clone https://github.com/Oscar0711/mimiyaku.git
+   cd mimiyaku
    uv sync
    ```
 
 3. 開啟程式：
 
    ```bash
-   uv run omni2-gui
+   uv run mimiyaku-gui
    ```
 
 4. 不想每次都開終端機的話，可以到「設定 → 其他」建立桌面捷徑。
 
-更新到最新版：在 `omni-translate` 資料夾執行 `git pull`，再執行 `uv sync`。
+更新到最新版：在 `mimiyaku` 資料夾執行 `git pull`，再執行 `uv sync`。
 
 ## 使用方式
 
@@ -120,16 +120,16 @@
 不開介面也可以處理檔案，適合批次作業：
 
 ```bash
-uv run omni2 file 影片.mp4 --to zh-TW
-uv run omni2 file 會議.m4a --no-translate --diarize --formats md,txt   # 純紀錄＋講者分離
-uv run omni2 file 直播.mp4 --terms --bilingual                          # 全文術語先行、雙語字幕
-uv run omni2 file https://www.youtube.com/watch?v=...                   # 影片網址
-uv run omni2 models recommend --apply                                   # 依硬體套用推薦設定
-uv run omni2 models download hy-mt2-7b-q6 llama-server
-uv run omni2 doctor                                                     # 檢查環境
+uv run mimiyaku file 影片.mp4 --to zh-TW
+uv run mimiyaku file 會議.m4a --no-translate --diarize --formats md,txt  # 純紀錄＋講者分離
+uv run mimiyaku file 直播.mp4 --terms --bilingual                         # 全文術語先行、雙語字幕
+uv run mimiyaku file https://www.youtube.com/watch?v=...                  # 影片網址
+uv run mimiyaku models recommend --apply                                  # 依硬體套用推薦設定
+uv run mimiyaku models download hy-mt2-7b-q6 llama-server
+uv run mimiyaku doctor                                                    # 檢查環境
 ```
 
-設定檔在 `%LOCALAPPDATA%\OmniTranslate2\config.yaml`。
+設定檔在 `%LOCALAPPDATA%\Mimiyaku\config.yaml`。
 
 ## 用到的模型
 
@@ -149,9 +149,9 @@ uv run omni2 doctor                                                     # 檢查
 
 ## 意見回報
 
-- **遇到問題**：程式裡的「設定 → 其他 → 回報問題」會開啟回報表單，並自動帶入版本和顯示卡資訊。也可以直接到 [Issues](https://github.com/Oscar0711/omni-translate/issues/new/choose) 回報。
+- **遇到問題**：程式裡的「設定 → 其他 → 回報問題」會開啟回報表單，並自動帶入版本和顯示卡資訊。也可以直接到 [Issues](https://github.com/Oscar0711/mimiyaku/issues/new/choose) 回報。
 - **功能建議**：同樣在 Issues 選「功能建議」。
-- **使用問題、想法、心得**：到 [討論區](https://github.com/Oscar0711/omni-translate/discussions)。
+- **使用問題、想法、心得**：到 [討論區](https://github.com/Oscar0711/mimiyaku/discussions)。
 
 回報時請不要貼上 API 金鑰。安全性問題請看 [SECURITY.md](SECURITY.md)。
 

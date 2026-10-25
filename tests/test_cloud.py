@@ -261,3 +261,13 @@ def test_funasr_parse_result_tidies_english():
     seg = parse_result(data)[0]
     assert seg.text == "The first week I felt strange."
     assert seg.words[0].text == "The"
+
+
+def test_secrets_moved_from_old_name(keyring):
+    keyring.set_password(secrets.LEGACY_SERVICE, "dashscope", "old-key")  # 改名前存的
+    assert secrets.secret_source("dashscope") == "keyring"
+    assert secrets.get_secret("dashscope") == "old-key"
+    assert keyring.store == {(secrets.SERVICE, "dashscope"): "old-key"}  # 搬到新名稱底下
+    keyring.set_password(secrets.LEGACY_SERVICE, "openai", "old")
+    secrets.set_secret("openai", None)  # 刪除時新舊都要刪
+    assert secrets.get_secret("openai") is None

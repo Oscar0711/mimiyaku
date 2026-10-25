@@ -1,4 +1,6 @@
-# OmniTranslate v2：重新設計計畫
+# Mimiyaku（原名 OmniTranslate v2）：重新設計計畫
+
+> 2026-10-25 公開前改名為 Mimiyaku（耳訳），因為 OmniTranslate 和其他軟體撞名。以下的開發紀錄保留當時的名稱。程式內部的套件名稱 `omni2`、舊的資料資料夾 `OmniTranslate2`（已經存在時繼續沿用）和認證管理員裡的舊金鑰（讀到時搬到新名稱底下）都還相容。
 
 ## Context
 上一版（舊的「全能翻譯」）功能齊全，但架構很亂，使用體驗也不好。例如 `gui/control_panel.py` 一個檔案就有 76KB。llama-cpp-python 在 RTX 50 系列上要自己找 CUDA 13 的 wheel 才能跑。卸載模型時 VRAM 也不一定會釋放乾淨。

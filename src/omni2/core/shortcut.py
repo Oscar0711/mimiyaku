@@ -1,4 +1,4 @@
-"""在桌面或開始功能表建立啟動捷徑（指向虛擬環境裡的 omni2-gui.exe，不開主控台視窗）。"""
+"""在桌面或開始功能表建立啟動捷徑（指向虛擬環境裡的 mimiyaku-gui.exe，不開主控台視窗）。"""
 
 from __future__ import annotations
 
@@ -6,8 +6,9 @@ import os
 import sys
 from pathlib import Path
 
-NAME = "OmniTranslate.lnk"
-APP_ID = "OmniTranslate2"  # 工作列用來辨認視窗屬於哪個程式，捷徑和視窗要一致
+NAME = "Mimiyaku.lnk"
+LEGACY_NAMES = ("OmniTranslate.lnk",)  # 改名前建立的捷徑，建新的時順便刪掉
+APP_ID = "Mimiyaku"  # 工作列用來辨認視窗屬於哪個程式，捷徑和視窗要一致
 
 
 def icon_path() -> Path:
@@ -15,11 +16,12 @@ def icon_path() -> Path:
 
 
 def launch_command() -> tuple[str, str]:
-    """（執行檔, 參數）。uv 安裝的 gui-scripts 會在 Scripts 底下產生 omni2-gui.exe。"""
+    """（執行檔, 參數）。uv 安裝的 gui-scripts 會在 Scripts 底下產生 mimiyaku-gui.exe。"""
     scripts = Path(sys.executable).parent
-    gui = scripts / "omni2-gui.exe"
-    if gui.exists():
-        return str(gui), ""
+    for name in ("mimiyaku-gui.exe", "omni2-gui.exe"):  # 改名前的環境只有 omni2-gui.exe
+        gui = scripts / name
+        if gui.exists():
+            return str(gui), ""
     pythonw = scripts / "pythonw.exe"
     return str(pythonw if pythonw.exists() else sys.executable), "-m omni2.ui.app"
 
@@ -51,10 +53,12 @@ def create(folder: Path) -> Path:
     link.TargetPath = exe
     link.Arguments = args
     link.WorkingDirectory = str(Path(sys.prefix).parent)  # 專案資料夾（.venv 的上一層）
-    link.Description = "OmniTranslate：語音辨識與字幕翻譯"
+    link.Description = "Mimiyaku：語音辨識與字幕翻譯"
     if icon_path().exists():
         link.IconLocation = f"{icon_path()},0"
     link.Save()
+    for old in LEGACY_NAMES:
+        (folder / old).unlink(missing_ok=True)
     return path
 
 
