@@ -148,6 +148,8 @@ class FileModeSettings(BaseModel):
     diarize: bool = False
     num_speakers: int = 0  # 0＝自動判斷
     terms_first: bool = False
+    folder: str = ""  # 中間資料夾瀏覽上次開的資料夾
+    folder_recursive: bool = False
 
 
 class OutputSettings(BaseModel):
