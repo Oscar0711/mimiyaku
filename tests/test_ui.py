@@ -195,3 +195,41 @@ def test_workspace_shows_which_model_is_used(workspace, monkeypatch):
     assert hint() == "使用 Whisper large-v3-turbo。"
     ws_.engine_combo.setCurrentIndex(ws_.engine_combo.findData("funasr"))
     assert ws_.model_hint.isHidden()
+
+
+def test_folder_browser_lists_media_and_marks_existing_subtitles(app, tmp_path):
+    from omni2.ui.folder_browser import FolderBrowser
+
+    (tmp_path / "a.mp4").write_bytes(b"x")
+    (tmp_path / "a.zh-TW.srt").write_text("1")
+    (tmp_path / "b.WAV").write_bytes(b"x")
+    (tmp_path / "notes.txt").write_text("不是影音檔")
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "c.mkv").write_bytes(b"x")
+    browser = FolderBrowser(str(tmp_path), False, lambda p: p.parent)
+    names = [browser.tree.topLevelItem(i).text(0) for i in range(browser.tree.topLevelItemCount())]
+    assert names == ["a.mp4", "b.WAV"]
+    assert [browser.tree.topLevelItem(i).text(2) for i in range(2)] == ["已有", ""]
+    browser.recursive_check.setChecked(True)
+    assert browser.tree.topLevelItemCount() == 3
+
+
+def test_folder_browser_checks_sync_with_queue(workspace, tmp_path):
+    (tmp_path / "a.mp4").write_bytes(b"x")
+    (tmp_path / "a.zh-TW.srt").write_text("1")
+    (tmp_path / "b.wav").write_bytes(b"x")
+    browser = workspace.browser
+    browser.set_folder(str(tmp_path))
+    browser.new_button.click()  # 只選沒字幕的
+    assert [e.input for e in workspace.entries.values()] == [str(tmp_path / "b.wav")]
+    browser.all_button.click()
+    assert workspace.queue.topLevelItemCount() == 2
+    # 從佇列移除會取消勾選
+    workspace.queue.topLevelItem(0).setSelected(True)
+    workspace._remove_selected()
+    assert len(browser.checked_paths()) == 1
+    # 取消勾選會從佇列移除；拖進來的檔案（斜線不同）也會勾起來
+    browser.none_button.click()
+    assert not workspace.entries
+    workspace.add_inputs([(tmp_path / "a.mp4").as_posix()])
+    assert browser.checked_paths() == [str(tmp_path / "a.mp4")]

@@ -37,11 +37,12 @@ from omni2.jobs.runner import STAGE_LABELS, FileRunner
 from omni2.models.recommend import missing_for
 from omni2.translate.glossary import Glossary
 from omni2.ui.bridge import RunnerThread
+from omni2.ui.folder_browser import MEDIA_EXTS, FolderBrowser
 from omni2.ui.model_hint import local_stt_hint
 from omni2.ui.player import PlayerPanel
 from omni2.ui.terms_dialog import TermsDialog
 
-MEDIA_FILTER = "影音檔 (*.mp3 *.wav *.m4a *.flac *.ogg *.opus *.aac *.mp4 *.mkv *.webm *.mov *.avi *.ts);;所有檔案 (*)"
+MEDIA_FILTER = f"影音檔 ({' '.join('*' + e for e in MEDIA_EXTS)});;所有檔案 (*)"
 SOURCE_LANGS = [("自動偵測", None), ("日文", "ja"), ("英文", "en"), ("韓文", "ko"), ("中文", "zh")]
 STT_ENGINES = [("Qwen3-ASR（本地，建議）", "qwen3-asr"), ("Whisper（本地）", "faster-whisper"),
                ("阿里雲 Fun-ASR（雲端）", "funasr"), ("OpenAI（雲端）", "openai"), ("Google（雲端）", "google")]
@@ -118,17 +119,37 @@ class FileWorkspace(QWidget):
         self.queue.setColumnWidth(COL_PROGRESS, 160)
         self.queue.itemSelectionChanged.connect(self._preview_selected)
         self.queue.itemDoubleClicked.connect(self._open_output)
-        self.hint = QLabel("把影音檔拖進來，或按「新增檔案」；也可以貼上影片網址。")
+        self.hint = QLabel("從左邊的資料夾勾選、把影音檔拖進來，或按「新增檔案」；也可以貼上影片網址。")
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.hint.setStyleSheet("color: palette(mid); padding: 12px;")
+        self.hint.setWordWrap(True)
+        self.hint.setStyleSheet("color: #888; padding: 12px;")
+
+        # ---- 資料夾瀏覽：勾選＝加進佇列 ----
+        fm = settings.file_mode
+        self.browser = FolderBrowser(fm.folder, fm.folder_recursive, self._out_dir_for)
+        self.browser.toggled.connect(self._on_browser_toggled)
+        self.browser.folder_changed.connect(self._remember_folder)
+        self.out_combo.currentIndexChanged.connect(lambda _i: self.browser.refresh_outputs())
+        self.out_edit.textChanged.connect(lambda _t: self.browser.refresh_outputs())
+
+        queue_box = QWidget()
+        queue_layout = QVBoxLayout(queue_box)
+        queue_layout.setContentsMargins(0, 0, 0, 0)
+        queue_layout.addWidget(self.hint)
+        queue_layout.addWidget(self.queue, 1)
+        middle = QSplitter(Qt.Orientation.Horizontal)
+        middle.addWidget(self.browser)
+        middle.addWidget(queue_box)
+        middle.setStretchFactor(0, 2)
+        middle.setStretchFactor(1, 3)
+        middle.setSizes([500, 750])
 
         top = QWidget()
         top_layout = QVBoxLayout(top)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.addLayout(toolbar)
         top_layout.addWidget(self.options)
-        top_layout.addWidget(self.hint)
-        top_layout.addWidget(self.queue, 1)
+        top_layout.addWidget(middle, 1)
 
         self.player = PlayerPanel()
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -323,6 +344,8 @@ class FileWorkspace(QWidget):
             self.queue.setItemWidget(item, COL_PROGRESS, bar)
             self.entries[jid] = QueueEntry(text, jid, item, bar)
             added += 1
+            if not is_url(text):
+                self.browser.set_checked({text}, True)
         self._update_buttons()
         return added
 
@@ -357,6 +380,31 @@ class FileWorkspace(QWidget):
     def _drop(self, entry: QueueEntry) -> None:
         self.queue.takeTopLevelItem(self.queue.indexOfTopLevelItem(entry.item))
         del self.entries[entry.id]
+        if not is_url(entry.input):
+            self.browser.set_checked({entry.input}, False)
+
+    # ---- 資料夾瀏覽 ----
+
+    def _out_dir_for(self, media: Path) -> Path:
+        """這個檔案的字幕會存到哪個資料夾（和開始處理時的規則相同）。"""
+        if self.out_combo.currentData() == "custom" and self.out_edit.text():
+            return Path(self.out_edit.text())
+        return media.parent
+
+    def _on_browser_toggled(self, files: list[str], checked: bool) -> None:
+        if checked:
+            self.add_inputs(files)
+            return
+        keys = {str(Path(f)).casefold() for f in files}
+        for entry in list(self.entries.values()):
+            if not is_url(entry.input) and str(Path(entry.input)).casefold() in keys and entry.state != "running":
+                self._drop(entry)
+        self._update_buttons()
+
+    def _remember_folder(self, folder: str, recursive: bool) -> None:
+        self.settings.file_mode.folder = folder
+        self.settings.file_mode.folder_recursive = recursive
+        save_settings(self.settings)
 
     def set_blocked(self, blocked: bool) -> None:
         """即時翻譯在進行時不能開始處理檔案（兩邊同時用顯示卡容易不夠）。"""
@@ -369,7 +417,7 @@ class FileWorkspace(QWidget):
         self.start_button.setEnabled(not running and pending and not self.blocked)
         self.stop_button.setEnabled(running)
         self.options.setEnabled(not running)
-        for w in (self.add_button, self.url_edit, self.remove_button, self.clear_button):
+        for w in (self.add_button, self.url_edit, self.remove_button, self.clear_button, self.browser):
             w.setEnabled(not running)
         self.hint.setVisible(not self.entries)
 
@@ -472,6 +520,7 @@ class FileWorkspace(QWidget):
             elif entry.state == "running":
                 self._set_row(entry, state="stopped", text="已停止", message="下次開始時會從斷點繼續")
         self._finish_thread()
+        self.browser.refresh_outputs()
         failed = sum(1 for j in jobs if j.error)
         self.status_changed.emit("已停止" if cancelled else f"全部處理完畢（{failed} 個失敗）" if failed
                                  else "全部處理完畢")
