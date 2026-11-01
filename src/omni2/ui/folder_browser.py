@@ -65,6 +65,7 @@ class FolderBrowser(QWidget):
     # 使用者勾選／取消勾選的檔案路徑
     toggled = Signal(list, bool)
     folder_changed = Signal(str, bool)
+    preview_requested = Signal(str)  # 點了某個檔案，要在播放器預覽
 
     def __init__(self, folder: str, recursive: bool, out_dir_for: Callable[[Path], Path], parent=None):
         super().__init__(parent)
@@ -100,6 +101,7 @@ class FolderBrowser(QWidget):
         header.setSectionResizeMode(COL_SUBS, QHeaderView.ResizeMode.ResizeToContents)
         header.setStretchLastSection(False)
         self.tree.itemChanged.connect(self._on_item_changed)
+        self.tree.currentItemChanged.connect(self._on_current_changed)
 
         self.all_button = QPushButton("全選")
         self.all_button.clicked.connect(lambda: self._check_where(lambda item: True))
@@ -205,6 +207,17 @@ class FolderBrowser(QWidget):
             return
         self._update_count()
         self.toggled.emit([item.data(COL_NAME, _PATH)], item.checkState(COL_NAME) == Qt.CheckState.Checked)
+
+    def _on_current_changed(self, item: QTreeWidgetItem | None, _previous) -> None:
+        if item is not None and not self._syncing:
+            self.preview_requested.emit(item.data(COL_NAME, _PATH))
+
+    def clear_current(self) -> None:
+        """改從佇列預覽時取消這裡的選取，之後再點同一個檔案才會重新預覽。"""
+        self.tree.blockSignals(True)
+        self.tree.setCurrentItem(None)
+        self.tree.clearSelection()
+        self.tree.blockSignals(False)
 
     def _check_where(self, want: Callable[[QTreeWidgetItem], bool]) -> None:
         """勾選符合條件的、取消其餘的，一次發一個 toggled。"""

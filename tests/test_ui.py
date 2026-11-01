@@ -6,6 +6,7 @@ import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from omni2.config.settings import FileModeSettings, Settings  # noqa: E402
+from omni2.core import paths  # noqa: E402
 from omni2.core.types import Segment  # noqa: E402
 from omni2.jobs.job import job_id  # noqa: E402
 from omni2.translate.terms import TermsResult  # noqa: E402
@@ -262,3 +263,21 @@ def test_folder_browser_checks_sync_with_queue(workspace, tmp_path):
     assert not workspace.entries
     workspace.add_inputs([(tmp_path / "a.mp4").as_posix()])
     assert browser.checked_paths() == [str(tmp_path / "a.mp4")]
+
+
+def test_folder_click_previews_from_subtitle_file(workspace, tmp_path, monkeypatch):
+    monkeypatch.setenv(paths.DATA_ENV, str(tmp_path / "data"))  # 沒有工作紀錄
+    media = tmp_path / "media"
+    media.mkdir()
+    (media / "a.wav").write_bytes(b"x")
+    (media / "a.ja.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\nこんにちは\n", encoding="utf-8")
+    (media / "a.zh-TW.srt").write_text("1\n00:00:01,000 --> 00:00:02,000\n你好\n", encoding="utf-8")
+    (media / "b.wav").write_bytes(b"x")
+    browser = workspace.browser
+    browser.set_folder(str(media))
+    browser.tree.setCurrentItem(browser.tree.topLevelItem(0))
+    assert "a.zh-TW.srt" in workspace.player.title.text()  # 目標語言的字幕優先
+    assert workspace.player.table.item(0, 2).text() == "你好"
+    assert not browser.checked_paths()  # 只預覽，不加進佇列
+    browser.tree.setCurrentItem(browser.tree.topLevelItem(1))  # 沒有字幕
+    assert workspace.player.table.rowCount() == 0

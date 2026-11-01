@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from omni2.config.settings import LayoutSettings
 from omni2.core.types import Cue, Segment
 from omni2.post.layout import cue_lines
@@ -160,3 +163,58 @@ def to_md(
                 out.append("")
         out.append("")
     return "\n".join(out)
+
+
+# ---- 讀回字幕檔（預覽沒有工作快取的檔案時用） ----
+
+_TIME = r"(?:(\d+):)?(\d{1,2}):(\d{2})[,.](\d{3})"
+_CUE_TIME = re.compile(rf"{_TIME}\s*-->\s*{_TIME}")
+_ASS_TIME = re.compile(r"(\d+):(\d{2}):(\d{2})\.(\d{2})")
+_HTML_TAG = re.compile(r"<[^>]*>")
+_ASS_OVERRIDE = re.compile(r"\{[^}]*\}")
+
+
+def _seconds(h: str | None, m: str, s: str, frac: str) -> float:
+    return int(h or 0) * 3600 + int(m) * 60 + int(s) + int(frac) / 10 ** len(frac)
+
+
+def _lines(lines: list[str]) -> str:
+    return "\n".join(x.strip() for x in lines if x.strip())  # 保留原本的換行，和看影片時的字幕一樣
+
+
+def _ass_text(body: str) -> str:
+    return _lines(_ASS_OVERRIDE.sub("", body).replace(r"\n", r"\N").split(r"\N"))
+
+
+def read_subtitles(path: Path) -> list[tuple[float, float, str, str | None]]:
+    """讀 SRT、VTT、ASS，回傳每句的（開始、結束、主要字幕、第二語言）。
+
+    只有 ASS 分得出雙語字幕的第二語言；SRT、VTT 的雙語字幕兩種語言會分行放在同一句裡。
+    """
+    raw = path.read_bytes()
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("cp950", errors="replace")  # 舊的繁中字幕常是 Big5
+    cues: list[tuple[float, float, str, str | None]] = []
+    if path.suffix.lower() == ".ass":
+        for line in text.splitlines():
+            parts = line.split(",", 9)
+            if not line.startswith("Dialogue:") or len(parts) < 10:
+                continue
+            start, end = (_ASS_TIME.fullmatch(t.strip()) for t in parts[1:3])
+            if start and end:
+                primary, _, secondary = parts[9].partition(r"\N{\rSecondary}")
+                cues.append((_seconds(*start.groups()), _seconds(*end.groups()),
+                             _ass_text(primary), _ass_text(secondary) or None))
+        return cues
+    for block in re.split(r"\n\s*\n", text.replace("\r\n", "\n")):
+        lines = block.strip().split("\n")
+        for i, line in enumerate(lines):
+            m = _CUE_TIME.search(line)
+            if m:
+                body = _lines([_HTML_TAG.sub("", x) for x in lines[i + 1:]])
+                if body:
+                    cues.append((_seconds(*m.groups()[:4]), _seconds(*m.groups()[4:]), body, None))
+                break
+    return cues
