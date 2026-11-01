@@ -31,13 +31,14 @@ from PySide6.QtWidgets import (
 
 from omni2.config.settings import Settings, save_settings
 from omni2.core import paths
-from omni2.export.formats import ALL_FORMATS
+from omni2.core.types import Segment
+from omni2.export.formats import ALL_FORMATS, SUBTITLE_FORMATS, read_subtitles
 from omni2.jobs.job import Job, JobSpec, is_url, job_id
 from omni2.jobs.runner import STAGE_LABELS, FileRunner
 from omni2.models.recommend import missing_for
 from omni2.translate.glossary import Glossary
 from omni2.ui.bridge import RunnerThread
-from omni2.ui.folder_browser import MEDIA_EXTS, FolderBrowser
+from omni2.ui.folder_browser import MEDIA_EXTS, FolderBrowser, existing_outputs
 from omni2.ui.model_hint import local_stt_hint
 from omni2.ui.player import PlayerPanel
 from omni2.ui.terms_dialog import TermsDialog
@@ -129,6 +130,7 @@ class FileWorkspace(QWidget):
         self.browser = FolderBrowser(fm.folder, fm.folder_recursive, self._out_dir_for)
         self.browser.toggled.connect(self._on_browser_toggled)
         self.browser.folder_changed.connect(self._remember_folder)
+        self.browser.preview_requested.connect(self._preview_file)
         self.out_combo.currentIndexChanged.connect(lambda _i: self.browser.refresh_outputs())
         self.out_edit.textChanged.connect(lambda _t: self.browser.refresh_outputs())
 
@@ -151,7 +153,7 @@ class FileWorkspace(QWidget):
         top_layout.addWidget(self.options)
         top_layout.addWidget(middle, 1)
 
-        self.player = PlayerPanel()
+        self.player = PlayerPanel(settings.file_mode)
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(top)
         splitter.addWidget(self.player)
@@ -548,19 +550,55 @@ class FileWorkspace(QWidget):
         if len(selected) != 1 or selected[0].state in ("running",):
             return
         entry = selected[0]
-        runner = FileRunner([entry.spec or self.make_spec(entry.input)], self.settings,
-                            glossary=Glossary.load(paths.glossary_path()))
+        self.browser.clear_current()
+        self._preview(entry.spec or self.make_spec(entry.input))
+
+    def _preview_file(self, path: str) -> None:
+        """資料夾瀏覽裡點的檔案；已經在佇列裡就用佇列的設定。"""
+        self.queue.blockSignals(True)
+        self.queue.clearSelection()
+        self.queue.blockSignals(False)
+        entry = self.entries.get(job_id(path))
+        self._preview((entry.spec if entry else None) or self.make_spec(path))
+
+    def _preview(self, spec: JobSpec) -> None:
+        runner = FileRunner([spec], self.settings, glossary=Glossary.load(paths.glossary_path()))
         job = runner.jobs[0]
-        result = runner.load_result(job)
-        if result is None:
-            self.player.clear()
-            return
-        transcript, translations = result
         try:
             media = job.source_path
         except KeyError:  # 網址還沒下載
             media = None
-        self.player.load(job.name, media, transcript.segments, translations)
+        result = runner.load_result(job)
+        if result is not None:
+            transcript, translations = result
+            self.player.load(job.name, media, transcript.segments, translations)
+            return
+        # 沒有這組設定的工作紀錄（別的程式做的字幕、改過設定、清過工作檔）：改讀旁邊的字幕檔
+        subtitle = None if is_url(spec.input) else self._subtitle_file(Path(spec.input))
+        if subtitle is None:
+            self.player.clear()
+            return
+        cues = read_subtitles(subtitle)
+        bilingual = any(second for *_, second in cues)  # 只有 ASS 分得出來：主要是譯文、第二語言是原文
+        segments = [Segment(start, end, (second or first) if bilingual else first)
+                    for start, end, first, second in cues]
+        translations = [first if second else None for *_, first, second in cues] if bilingual else None
+        self.player.load(f"{job.name}（從 {subtitle.name} 載入）", media, segments, translations)
+
+    def _subtitle_file(self, media: Path) -> Path | None:
+        """輸出資料夾裡這個檔案的字幕；有好幾個時優先選目標語言的、SRT 優先。"""
+        out_dir = self._out_dir_for(media)
+        names = [n for n in existing_outputs(media, out_dir)
+                 if Path(n).suffix.lower().lstrip(".") in SUBTITLE_FORMATS]
+        if not names:
+            return None
+        target = self.settings.translate.target.casefold()
+
+        def rank(name: str) -> tuple[bool, int]:
+            tag = Path(name[len(media.stem) + 1:]).stem.casefold()  # 「原檔名.語言.格式」的語言
+            return tag != target, SUBTITLE_FORMATS.index(Path(name).suffix.lower().lstrip("."))
+
+        return out_dir / min(names, key=rank)
 
     def _open_output(self, item: QTreeWidgetItem, _col: int) -> None:
         for entry in self.entries.values():

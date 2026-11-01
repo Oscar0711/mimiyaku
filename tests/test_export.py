@@ -49,3 +49,26 @@ def test_md_groups_speaker_turns():
     out = fmt.to_md(segs, None, title="會議")
     assert "**講者 A** · 00:00:00\n\n早安。今天好熱。" in out
     assert "**講者 B** · 00:00:02\n\n對啊。" in out
+
+
+def test_read_subtitles_round_trip(tmp_path):
+    cues = [Cue(1.0, 2.5, "你好", "こんにちは"), Cue(3.0, 4.25, "<b>再見</b>")]
+    layout = LayoutSettings()
+    for kind, write in (("srt", fmt.to_srt), ("vtt", fmt.to_vtt), ("ass", fmt.to_ass)):
+        path = tmp_path / f"a.zh-TW.{kind}"
+        path.write_text(write(cues, layout), encoding="utf-8")
+        got = fmt.read_subtitles(path)
+        assert [(round(s, 2), round(e, 2)) for s, e, *_ in got] == [(1.0, 2.5), (3.0, 4.25)]
+        if kind == "ass":  # 只有 ASS 分得出第二語言
+            assert [(p, s) for *_, p, s in got] == [("你好", "こんにちは"), ("<b>再見</b>", None)]
+        else:
+            assert [(p, s) for *_, p, s in got] == [("你好\nこんにちは", None), ("再見", None)]
+
+
+def test_read_subtitles_big5_and_short_vtt_times(tmp_path):
+    path = tmp_path / "old.srt"
+    path.write_bytes("1\n00:00:01,000 --> 00:00:02,000\n舊字幕\n".encode("cp950"))
+    assert fmt.read_subtitles(path) == [(1.0, 2.0, "舊字幕", None)]
+    path = tmp_path / "short.vtt"
+    path.write_text("WEBVTT\n\n01:02.500 --> 01:03.000 align:start\nhi\n", encoding="utf-8")
+    assert fmt.read_subtitles(path) == [(62.5, 63.0, "hi", None)]

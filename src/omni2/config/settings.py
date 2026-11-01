@@ -150,6 +150,10 @@ class FileModeSettings(BaseModel):
     terms_first: bool = False
     folder: str = ""  # 中間資料夾瀏覽上次開的資料夾
     folder_recursive: bool = False
+    # 預覽播放器；音量增益不存，每次開檔都從關閉開始，避免突然太大聲
+    player_volume: int = 100  # 0–100，對數刻度（見 omni2.ui.player）
+    subtitle_size: int = 14  # pt
+    subtitle_size_fullscreen: int = 32
 
 
 class OutputSettings(BaseModel):
