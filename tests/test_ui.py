@@ -5,12 +5,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from omni2.config.settings import Settings  # noqa: E402
+from omni2.config.settings import FileModeSettings, Settings  # noqa: E402
 from omni2.core.types import Segment  # noqa: E402
 from omni2.jobs.job import job_id  # noqa: E402
 from omni2.translate.terms import TermsResult  # noqa: E402
 from omni2.ui import workspace as ws  # noqa: E402
-from omni2.ui.player import PlayerPanel, segment_at  # noqa: E402
+from omni2.ui.player import PlayerPanel, segment_at, volume_level  # noqa: E402
 from omni2.ui.terms_dialog import TermsDialog  # noqa: E402
 
 
@@ -59,6 +59,35 @@ def test_player_shows_translation_and_highlights_row(app):
     assert player.table.currentRow() == 1
     player._on_position(500)
     assert (player.primary.text(), player.secondary.text()) == ("你好", "こんにちは")
+
+
+def test_player_gain_resets_on_each_load(app):
+    fm = FileModeSettings(player_volume=60)
+    player = PlayerPanel(fm)
+    assert player.volume_slider.value() == 60
+    player.gain_combo.setCurrentIndex(player.gain_combo.findData(3.0))
+    assert player.gain_output.active and player.audio.isMuted()  # 放大時內建輸出只當時鐘
+    assert player.gain_output.level == pytest.approx(volume_level(60) * 3)
+    player.load("下一個", None, [], None)
+    assert player.gain_combo.currentData() == 1.0
+    assert not player.gain_output.active and not player.audio.isMuted()
+    assert player.volume_slider.value() == 60  # 基本音量照樣沿用
+    player.stop()
+
+
+def test_player_fullscreen_keeps_separate_subtitle_size(app):
+    fm = FileModeSettings(subtitle_size=14, subtitle_size_fullscreen=32)
+    player = PlayerPanel(fm)
+    player.size_spin.setValue(18)
+    assert fm.subtitle_size == 18 and player.primary.font().pointSize() == 18
+    player.enter_fullscreen()
+    assert player.is_fullscreen() and player.stage.window() is not player.window()
+    assert player.size_spin.value() == 32
+    player.size_spin.setValue(40)
+    player.exit_fullscreen()
+    assert not player.is_fullscreen() and player.splitter.widget(0) is player.stage
+    assert (fm.subtitle_size, fm.subtitle_size_fullscreen) == (18, 40)
+    assert player.primary.font().pointSize() == 18
 
 
 def test_add_inputs_skips_duplicates_and_missing(workspace, tmp_path):

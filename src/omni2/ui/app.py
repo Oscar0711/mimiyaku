@@ -106,7 +106,7 @@ class MainWindow(QMainWindow):
         if self.settings_page.models.is_downloading():  # 沒下載完的部分留著，下次接著下載
             self.settings_page.models.cancel_downloads()
             self.settings_page.models.queue.wait(10000)
-        self.workspace.player.media.stop()
+        self.workspace.player.stop()
         self.hotkeys.unregister()
         self.overlay.close()
         save_settings(self.settings)

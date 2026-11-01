@@ -151,7 +151,7 @@ class FileWorkspace(QWidget):
         top_layout.addWidget(self.options)
         top_layout.addWidget(middle, 1)
 
-        self.player = PlayerPanel()
+        self.player = PlayerPanel(settings.file_mode)
         splitter = QSplitter(Qt.Orientation.Vertical)
         splitter.addWidget(top)
         splitter.addWidget(self.player)
