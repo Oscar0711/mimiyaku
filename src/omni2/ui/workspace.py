@@ -122,7 +122,7 @@ class FileWorkspace(QWidget):
         self.hint = QLabel("從左邊的資料夾勾選、把影音檔拖進來，或按「新增檔案」；也可以貼上影片網址。")
         self.hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hint.setWordWrap(True)
-        self.hint.setStyleSheet("color: palette(mid); padding: 12px;")
+        self.hint.setStyleSheet("color: #888; padding: 12px;")
 
         # ---- 資料夾瀏覽：勾選＝加進佇列 ----
         fm = settings.file_mode

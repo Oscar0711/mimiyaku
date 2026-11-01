@@ -55,7 +55,7 @@ class PlayerPanel(QWidget):
         self.media.setVideoOutput(self.video)
 
         self.title = QLabel("選一個已完成的檔案來預覽")
-        self.title.setStyleSheet("color: palette(mid);")
+        self.title.setStyleSheet("color: #888;")
         self.primary = QLabel("")
         self.primary.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.primary.setWordWrap(True)
